@@ -382,6 +382,213 @@ resource "typesense_api_key" "public_search" {
 
 ---
 
+## Exporting and Migrating Configuration
+
+The provider includes a CLI command to export existing Typesense configuration to Terraform files. This is useful for:
+
+- **Adopting Terraform** for an existing Typesense cluster
+- **Migrating configuration** from one cluster to another
+- **Backing up** your Typesense schema and settings
+- **Cloning environments** (e.g., production → staging)
+
+### Generate Command
+
+Export configuration from an existing Typesense cluster:
+
+```bash
+# Build the provider binary first
+go build -o terraform-provider-typesense
+
+# Export from a Typesense Cloud cluster
+./terraform-provider-typesense generate \
+  --host=your-cluster.a1.typesense.net \
+  --port=443 \
+  --protocol=https \
+  --api-key=your-admin-api-key \
+  --output=./exported
+
+# Export from a self-hosted Typesense server
+./terraform-provider-typesense generate \
+  --host=localhost \
+  --port=8108 \
+  --protocol=http \
+  --api-key=your-api-key \
+  --output=./exported
+```
+
+### Generated Files
+
+The command creates two files in the output directory:
+
+| File | Purpose |
+|------|---------|
+| `main.tf` | Terraform configuration with all exported resources |
+| `imports.sh` | Shell script with `terraform import` commands |
+
+### Migration Workflow: Step by Step
+
+#### Step 1: Export from Source Cluster
+
+```bash
+./terraform-provider-typesense generate \
+  --host=source-cluster.a1.typesense.net \
+  --port=443 \
+  --protocol=https \
+  --api-key=SOURCE_ADMIN_API_KEY \
+  --output=./exported
+```
+
+#### Step 2: Review Generated Configuration
+
+```bash
+cd ./exported
+cat main.tf
+```
+
+The generated `main.tf` includes:
+- Provider configuration block
+- All collections with their schemas
+- Synonyms (per-collection for Typesense ≤29, or synonym_sets for v30+)
+- Overrides/curations
+- Stopwords sets
+- API keys (with placeholder values - see note below)
+
+**Important Notes:**
+- API key values are **not exported** (they're secrets). The generated config uses placeholders.
+- Review the configuration and adjust any values as needed for your target environment.
+
+#### Step 3: Configure for Target Cluster
+
+Edit `main.tf` to point to your target cluster:
+
+```hcl
+provider "typesense" {
+  server_host     = "target-cluster.a1.typesense.net"  # Change this
+  server_api_key  = "TARGET_ADMIN_API_KEY"              # Change this
+  server_port     = 443
+  server_protocol = "https"
+}
+```
+
+Or use environment variables:
+
+```bash
+export TYPESENSE_HOST="target-cluster.a1.typesense.net"
+export TYPESENSE_API_KEY="TARGET_ADMIN_API_KEY"
+```
+
+#### Step 4: Initialize Terraform
+
+```bash
+terraform init
+```
+
+#### Step 5: Choose Your Approach
+
+**Option A: Fresh Creation (New/Empty Cluster)**
+
+If the target cluster is empty, simply apply the configuration:
+
+```bash
+terraform plan    # Review what will be created
+terraform apply   # Create all resources
+```
+
+**Option B: Import Existing Resources (Target Has Existing Data)**
+
+If the target cluster already has some resources that match, import them first:
+
+```bash
+# Make the import script executable
+chmod +x imports.sh
+
+# Run the import commands
+./imports.sh
+```
+
+The `imports.sh` script contains commands like:
+
+```bash
+terraform import typesense_collection.products products
+terraform import typesense_synonym.products_shoe_synonyms products/shoe-synonyms
+terraform import typesense_stopwords_set.english english-stopwords
+# ... etc
+```
+
+After importing, verify the state matches:
+
+```bash
+terraform plan  # Should show no changes if everything matches
+```
+
+#### Step 6: Ongoing Management
+
+After the initial setup, manage your Typesense configuration through Terraform:
+
+```bash
+# Make changes in main.tf, then:
+terraform plan   # Preview changes
+terraform apply  # Apply changes
+```
+
+### Complete Migration Example
+
+```bash
+# 1. Build the provider
+go build -o terraform-provider-typesense
+
+# 2. Export from production
+./terraform-provider-typesense generate \
+  --host=prod-cluster.a1.typesense.net \
+  --port=443 \
+  --protocol=https \
+  --api-key=$PROD_API_KEY \
+  --output=./staging-config
+
+# 3. Navigate to exported config
+cd ./staging-config
+
+# 4. Update provider to point to staging
+sed -i 's/prod-cluster/staging-cluster/g' main.tf
+# Or manually edit main.tf
+
+# 5. Set staging API key
+export TYPESENSE_API_KEY="$STAGING_API_KEY"
+
+# 6. Initialize and apply
+terraform init
+terraform plan
+terraform apply
+```
+
+### Typesense Version Compatibility
+
+The generate command automatically handles API differences between Typesense versions:
+
+| Feature | Typesense ≤29 | Typesense 30+ |
+|---------|---------------|---------------|
+| Synonyms | Per-collection (`/collections/{name}/synonyms`) | System-level (`/synonym_sets`) |
+| Overrides | Per-collection (`/collections/{name}/overrides`) | System-level (`/curation_sets`) |
+
+The generated configuration will include comments noting which API version was detected.
+
+### Troubleshooting
+
+**"Not Found" errors during generate:**
+- Verify your API key has admin permissions
+- Check the host, port, and protocol are correct
+- For Typesense Cloud, use port 443 and protocol https
+
+**Import fails with "resource already exists":**
+- The resource is already in Terraform state
+- Remove it from state first: `terraform state rm <resource_address>`
+
+**Plan shows unexpected changes after import:**
+- Some computed fields may differ between source and target
+- Review and update the configuration to match your target cluster's reality
+
+---
+
 ## Available Resources
 
 ### Cloud Management Resources
