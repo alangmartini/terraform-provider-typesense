@@ -17,6 +17,48 @@ type ServerClient struct {
 	baseURL    string
 }
 
+// ServerInfo contains debug/version information from the Typesense server
+type ServerInfo struct {
+	State   int    `json:"state"`
+	Version string `json:"version"`
+}
+
+// SynonymSet represents a Typesense synonym set (v30.0+)
+type SynonymSet struct {
+	Name     string        `json:"name"`
+	Synonyms []SynonymItem `json:"synonyms,omitempty"`
+}
+
+// SynonymItem represents a synonym item within a synonym set (v30.0+)
+type SynonymItem struct {
+	ID       string   `json:"id"`
+	Root     string   `json:"root,omitempty"`
+	Synonyms []string `json:"synonyms"`
+}
+
+// CurationSet represents a Typesense curation set (v30.0+)
+type CurationSet struct {
+	Name       string         `json:"name"`
+	Curations  []CurationItem `json:"curations,omitempty"`
+}
+
+// CurationItem represents a curation item within a curation set (v30.0+)
+type CurationItem struct {
+	ID                  string             `json:"id"`
+	Rule                OverrideRule       `json:"rule"`
+	Includes            []OverrideInclude  `json:"includes,omitempty"`
+	Excludes            []OverrideExclude  `json:"excludes,omitempty"`
+	FilterBy            string             `json:"filter_by,omitempty"`
+	SortBy              string             `json:"sort_by,omitempty"`
+	ReplaceQuery        string             `json:"replace_query,omitempty"`
+	RemoveMatchedTokens bool               `json:"remove_matched_tokens,omitempty"`
+	FilterCuratedHits   bool               `json:"filter_curated_hits,omitempty"`
+	EffectiveFromTs     int64              `json:"effective_from_ts,omitempty"`
+	EffectiveToTs       int64              `json:"effective_to_ts,omitempty"`
+	StopProcessing      bool               `json:"stop_processing,omitempty"`
+	Metadata            map[string]any     `json:"metadata,omitempty"`
+}
+
 // NewServerClient creates a new Server API client
 func NewServerClient(host, apiKey string, port int, protocol string) *ServerClient {
 	baseURL := fmt.Sprintf("%s://%s:%d", protocol, host, port)
@@ -605,6 +647,100 @@ func (c *ServerClient) setHeaders(req *http.Request) {
 	req.Header.Set("X-TYPESENSE-API-KEY", c.apiKey)
 }
 
+// GetServerInfo retrieves debug/version information from the server
+func (c *ServerClient) GetServerInfo(ctx context.Context) (*ServerInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/debug", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get server info: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get server info: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result ServerInfo
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// ListSynonymSets retrieves all synonym sets (Typesense v30.0+)
+func (c *ServerClient) ListSynonymSets(ctx context.Context) ([]SynonymSet, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/synonym_sets", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list synonym sets: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		// Endpoint doesn't exist, likely older Typesense version
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list synonym sets: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result []SynonymSet
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return result, nil
+}
+
+// ListCurationSets retrieves all curation sets (Typesense v30.0+)
+func (c *ServerClient) ListCurationSets(ctx context.Context) ([]CurationSet, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/curation_sets", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list curation sets: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		// Endpoint doesn't exist, likely older Typesense version
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list curation sets: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result []CurationSet
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return result, nil
+}
+
 // ListCollections retrieves all collections
 func (c *ServerClient) ListCollections(ctx context.Context) ([]Collection, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/collections", nil)
@@ -633,7 +769,9 @@ func (c *ServerClient) ListCollections(ctx context.Context) ([]Collection, error
 	return result, nil
 }
 
-// ListSynonyms retrieves all synonyms for a collection
+// ListSynonyms retrieves all synonyms for a collection (Typesense v29 and earlier)
+// For Typesense v30+, this endpoint doesn't exist - use ListSynonymSets instead.
+// Returns an empty list if the endpoint doesn't exist (404).
 func (c *ServerClient) ListSynonyms(ctx context.Context, collectionName string) ([]Synonym, error) {
 	url := fmt.Sprintf("%s/collections/%s/synonyms", c.baseURL, collectionName)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -648,6 +786,12 @@ func (c *ServerClient) ListSynonyms(ctx context.Context, collectionName string) 
 		return nil, fmt.Errorf("failed to list synonyms: %w", err)
 	}
 	defer resp.Body.Close()
+
+	// In Typesense 30.0+, the per-collection synonyms endpoint no longer exists
+	// Return empty list instead of error to allow graceful fallback
+	if resp.StatusCode == http.StatusNotFound {
+		return []Synonym{}, nil
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -665,7 +809,9 @@ func (c *ServerClient) ListSynonyms(ctx context.Context, collectionName string) 
 	return wrapper.Synonyms, nil
 }
 
-// ListOverrides retrieves all overrides for a collection
+// ListOverrides retrieves all overrides for a collection (Typesense v29 and earlier)
+// For Typesense v30+, this endpoint doesn't exist - use ListCurationSets instead.
+// Returns an empty list if the endpoint doesn't exist (404).
 func (c *ServerClient) ListOverrides(ctx context.Context, collectionName string) ([]Override, error) {
 	url := fmt.Sprintf("%s/collections/%s/overrides", c.baseURL, collectionName)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -680,6 +826,12 @@ func (c *ServerClient) ListOverrides(ctx context.Context, collectionName string)
 		return nil, fmt.Errorf("failed to list overrides: %w", err)
 	}
 	defer resp.Body.Close()
+
+	// In Typesense 30.0+, the per-collection overrides endpoint no longer exists
+	// Return empty list instead of error to allow graceful fallback
+	if resp.StatusCode == http.StatusNotFound {
+		return []Override{}, nil
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)

@@ -232,7 +232,38 @@ func (g *Generator) generateSynonyms(ctx context.Context, f *hclwrite.File, reso
 		collectionName string
 	}
 
-	// Get synonyms for each collection
+	// First try the new synonym_sets API (Typesense v30.0+)
+	synonymSets, err := g.serverClient.ListSynonymSets(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list synonym sets: %w", err)
+	}
+
+	if synonymSets != nil {
+		// Using Typesense v30.0+ API - synonym sets are system-level, not per-collection
+		if len(synonymSets) == 0 {
+			return nil
+		}
+
+		// Add section header
+		f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+			{Type: 4, Bytes: []byte("# ============================================\n# SYNONYM SETS (Typesense v30.0+)\n# Note: Synonym sets are now system-level, not per-collection\n# ============================================\n\n")},
+		})
+
+		for _, synSet := range synonymSets {
+			resourceName := MakeUniqueResourceName("synonym_set_"+synSet.Name, resourceNames)
+			// TODO: Generate synonym set blocks when the Terraform resource is implemented
+			// For now, add a comment noting the synonym set exists
+			comment := fmt.Sprintf("# Synonym set: %s (Terraform resource not yet implemented)\n\n", synSet.Name)
+			f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+				{Type: 4, Bytes: []byte(comment)},
+			})
+			_ = resourceName // Silence unused variable warning
+		}
+
+		return nil
+	}
+
+	// Fallback to old per-collection synonyms API (Typesense v29 and earlier)
 	collections, err := g.serverClient.ListCollections(ctx)
 	if err != nil {
 		return err
@@ -278,12 +309,43 @@ func (g *Generator) generateSynonyms(ctx context.Context, f *hclwrite.File, reso
 }
 
 func (g *Generator) generateOverrides(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, collectionResourceMap map[string]string, importCommands *[]ImportCommand) error {
+	// First try the new curation_sets API (Typesense v30.0+)
+	curationSets, err := g.serverClient.ListCurationSets(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list curation sets: %w", err)
+	}
+
+	if curationSets != nil {
+		// Using Typesense v30.0+ API - curation sets are system-level, not per-collection
+		if len(curationSets) == 0 {
+			return nil
+		}
+
+		// Add section header
+		f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+			{Type: 4, Bytes: []byte("# ============================================\n# CURATION SETS (Typesense v30.0+)\n# Note: Curation sets (formerly overrides) are now system-level, not per-collection\n# ============================================\n\n")},
+		})
+
+		for _, curSet := range curationSets {
+			resourceName := MakeUniqueResourceName("curation_set_"+curSet.Name, resourceNames)
+			// TODO: Generate curation set blocks when the Terraform resource is implemented
+			// For now, add a comment noting the curation set exists
+			comment := fmt.Sprintf("# Curation set: %s (Terraform resource not yet implemented)\n\n", curSet.Name)
+			f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+				{Type: 4, Bytes: []byte(comment)},
+			})
+			_ = resourceName // Silence unused variable warning
+		}
+
+		return nil
+	}
+
+	// Fallback to old per-collection overrides API (Typesense v29 and earlier)
 	var allOverrides []struct {
 		override       client.Override
 		collectionName string
 	}
 
-	// Get overrides for each collection
 	collections, err := g.serverClient.ListCollections(ctx)
 	if err != nil {
 		return err
