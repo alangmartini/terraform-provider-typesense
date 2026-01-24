@@ -170,43 +170,6 @@ func TestGenerateStopwordsBlock(t *testing.T) {
 	}
 }
 
-func TestGenerateAPIKeyBlock(t *testing.T) {
-	apiKey := &client.APIKey{
-		ID:          42,
-		Description: "Search-only key",
-		Actions:     []string{"documents:search"},
-		Collections: []string{"products", "users"},
-		ExpiresAt:   1735689600,
-	}
-
-	block := generateAPIKeyBlock(apiKey, "key_42")
-	hcl := blockToHCL(block)
-
-	if !strings.Contains(hcl, `resource "typesense_api_key" "key_42"`) {
-		t.Error("Block should contain resource type and name")
-	}
-	if !containsAttr(hcl, "description", `"Search-only key"`) {
-		t.Error("Block should contain description")
-	}
-	if !strings.Contains(hcl, `"documents:search"`) {
-		t.Error("Block should contain actions")
-	}
-}
-
-func TestGenerateAPIKeyComment(t *testing.T) {
-	comment := generateAPIKeyComment(42)
-
-	if !strings.Contains(comment, "WARNING") {
-		t.Error("Comment should contain warning")
-	}
-	if !strings.Contains(comment, "key ID: 42") {
-		t.Error("Comment should contain key ID")
-	}
-	if !strings.Contains(comment, "terraform import typesense_api_key.key_42 42") {
-		t.Error("Comment should contain import command")
-	}
-}
-
 func TestGenerateClusterBlock(t *testing.T) {
 	cluster := &client.Cluster{
 		ID:                     "abc123",

@@ -54,11 +54,6 @@ func StopwordsImportID(id string) string {
 	return id
 }
 
-// APIKeyImportID returns the import ID for an API key
-func APIKeyImportID(id int64) string {
-	return fmt.Sprintf("%d", id)
-}
-
 // ClusterImportID returns the import ID for a cluster
 func ClusterImportID(id string) string {
 	return id

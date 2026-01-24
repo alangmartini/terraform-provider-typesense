@@ -108,11 +108,6 @@ func (g *Generator) Generate(ctx context.Context) error {
 		if err := g.generateOverrides(ctx, f, resourceNames, collectionResourceMap, &importCommands); err != nil {
 			return fmt.Errorf("failed to generate overrides: %w", err)
 		}
-
-		// API Keys (with warnings)
-		if err := g.generateAPIKeys(ctx, f, resourceNames, &importCommands); err != nil {
-			return fmt.Errorf("failed to generate API keys: %w", err)
-		}
 	}
 
 	// Write main.tf
@@ -390,40 +385,3 @@ func (g *Generator) generateOverrides(ctx context.Context, f *hclwrite.File, res
 	return nil
 }
 
-func (g *Generator) generateAPIKeys(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
-	keys, err := g.serverClient.ListAPIKeys(ctx)
-	if err != nil {
-		return err
-	}
-
-	if len(keys) == 0 {
-		return nil
-	}
-
-	// Add section header
-	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
-		{Type: 4, Bytes: []byte("# ============================================\n# API KEYS\n# ============================================\n\n")},
-	})
-
-	for _, key := range keys {
-		resourceName := MakeUniqueResourceName(fmt.Sprintf("key_%d", key.ID), resourceNames)
-
-		// Add warning comment before the resource
-		warning := generateAPIKeyComment(key.ID)
-		f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
-			{Type: 4, Bytes: []byte(warning)},
-		})
-
-		block := generateAPIKeyBlock(&key, resourceName)
-		f.Body().AppendBlock(block)
-		f.Body().AppendNewline()
-
-		*importCommands = append(*importCommands, ImportCommand{
-			ResourceType: "typesense_api_key",
-			ResourceName: resourceName,
-			ImportID:     APIKeyImportID(key.ID),
-		})
-	}
-
-	return nil
-}

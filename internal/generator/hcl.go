@@ -222,45 +222,6 @@ func generateStopwordsBlock(sw *client.StopwordsSet, resourceName string) *hclwr
 	return block
 }
 
-// generateAPIKeyBlock creates an HCL block for an API key resource with warnings
-func generateAPIKeyBlock(k *client.APIKey, resourceName string) *hclwrite.Block {
-	block := hclwrite.NewBlock("resource", []string{"typesense_api_key", resourceName})
-	body := block.Body()
-
-	body.SetAttributeValue("description", cty.StringVal(k.Description))
-
-	if len(k.Actions) > 0 {
-		vals := make([]cty.Value, len(k.Actions))
-		for i, v := range k.Actions {
-			vals[i] = cty.StringVal(v)
-		}
-		body.SetAttributeValue("actions", cty.ListVal(vals))
-	}
-
-	if len(k.Collections) > 0 {
-		vals := make([]cty.Value, len(k.Collections))
-		for i, v := range k.Collections {
-			vals[i] = cty.StringVal(v)
-		}
-		body.SetAttributeValue("collections", cty.ListVal(vals))
-	}
-
-	if k.ExpiresAt > 0 {
-		body.SetAttributeValue("expires_at", cty.NumberIntVal(k.ExpiresAt))
-	}
-
-	return block
-}
-
-// generateAPIKeyComment creates a warning comment for API key resources
-func generateAPIKeyComment(keyID int64) string {
-	return fmt.Sprintf(`# WARNING: API key values cannot be exported from Typesense.
-# Applying this will CREATE A NEW KEY (original key ID: %d).
-# To import existing key metadata instead:
-#   terraform import typesense_api_key.key_%d %d
-`, keyID, keyID, keyID)
-}
-
 // generateClusterBlock creates an HCL block for a cloud cluster resource
 func generateClusterBlock(cl *client.Cluster, resourceName string) *hclwrite.Block {
 	block := hclwrite.NewBlock("resource", []string{"typesense_cluster", resourceName})

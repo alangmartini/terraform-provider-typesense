@@ -17,11 +17,6 @@ func TestGenerateImportScript(t *testing.T) {
 			ResourceName: "products_clothing",
 			ImportID:     "products/clothing",
 		},
-		{
-			ResourceType: "typesense_api_key",
-			ResourceName: "key_42",
-			ImportID:     "42",
-		},
 	}
 
 	script := GenerateImportScript(commands)
@@ -40,9 +35,6 @@ func TestGenerateImportScript(t *testing.T) {
 	}
 	if !strings.Contains(script, `terraform import typesense_synonym.products_clothing "products/clothing"`) {
 		t.Error("Script should contain synonym import command")
-	}
-	if !strings.Contains(script, `terraform import typesense_api_key.key_42 "42"`) {
-		t.Error("Script should contain API key import command")
 	}
 }
 
@@ -71,13 +63,6 @@ func TestStopwordsImportID(t *testing.T) {
 	id := StopwordsImportID("common_words")
 	if id != "common_words" {
 		t.Errorf("StopwordsImportID = %q, want %q", id, "common_words")
-	}
-}
-
-func TestAPIKeyImportID(t *testing.T) {
-	id := APIKeyImportID(42)
-	if id != "42" {
-		t.Errorf("APIKeyImportID = %q, want %q", id, "42")
 	}
 }
 
