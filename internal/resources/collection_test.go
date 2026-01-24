@@ -1,9 +1,10 @@
-package resources
+package resources_test
 
 import (
 	"fmt"
 	"testing"
 
+	"github.com/alanm/terraform-provider-typesense/internal/provider"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
@@ -12,8 +13,8 @@ func TestAccCollectionResource_basic(t *testing.T) {
 	rName := acctest.RandomWithPrefix("test-collection")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCollectionResourceConfig_basic(rName),
@@ -41,8 +42,8 @@ func TestAccCollectionResource_full(t *testing.T) {
 	rName := acctest.RandomWithPrefix("test-collection")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCollectionResourceConfig_full(rName),
@@ -77,8 +78,8 @@ func TestAccCollectionResource_update(t *testing.T) {
 	rName := acctest.RandomWithPrefix("test-collection")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCollectionResourceConfig_basic(rName),

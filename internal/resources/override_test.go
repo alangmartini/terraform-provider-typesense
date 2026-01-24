@@ -1,9 +1,10 @@
-package resources
+package resources_test
 
 import (
 	"fmt"
 	"testing"
 
+	"github.com/alanm/terraform-provider-typesense/internal/provider"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
@@ -13,8 +14,8 @@ func TestAccOverrideResource_includes(t *testing.T) {
 	overrideName := acctest.RandomWithPrefix("test-override")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccOverrideResourceConfig_includes(rName, overrideName),
@@ -46,8 +47,8 @@ func TestAccOverrideResource_excludes(t *testing.T) {
 	overrideName := acctest.RandomWithPrefix("test-override")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccOverrideResourceConfig_excludes(rName, overrideName),
@@ -77,8 +78,8 @@ func TestAccOverrideResource_filterBy(t *testing.T) {
 	overrideName := acctest.RandomWithPrefix("test-override")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccOverrideResourceConfig_filterBy(rName, overrideName),
@@ -106,8 +107,8 @@ func TestAccOverrideResource_replaceQuery(t *testing.T) {
 	overrideName := acctest.RandomWithPrefix("test-override")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccOverrideResourceConfig_replaceQuery(rName, overrideName),

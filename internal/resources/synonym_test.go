@@ -1,9 +1,10 @@
-package resources
+package resources_test
 
 import (
 	"fmt"
 	"testing"
 
+	"github.com/alanm/terraform-provider-typesense/internal/provider"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
@@ -13,8 +14,8 @@ func TestAccSynonymResource_multiWay(t *testing.T) {
 	synonymName := acctest.RandomWithPrefix("test-synonym")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSynonymResourceConfig_multiWay(rName, synonymName),
@@ -43,8 +44,8 @@ func TestAccSynonymResource_oneWay(t *testing.T) {
 	synonymName := acctest.RandomWithPrefix("test-synonym")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSynonymResourceConfig_oneWay(rName, synonymName),
@@ -73,8 +74,8 @@ func TestAccSynonymResource_update(t *testing.T) {
 	synonymName := acctest.RandomWithPrefix("test-synonym")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSynonymResourceConfig_multiWay(rName, synonymName),

@@ -1,9 +1,10 @@
-package resources
+package resources_test
 
 import (
 	"fmt"
 	"testing"
 
+	"github.com/alanm/terraform-provider-typesense/internal/provider"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
@@ -12,8 +13,8 @@ func TestAccAPIKeyResource_basic(t *testing.T) {
 	rName := acctest.RandomWithPrefix("test-api-key")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccAPIKeyResourceConfig_basic(rName),
@@ -40,8 +41,8 @@ func TestAccAPIKeyResource_full(t *testing.T) {
 	rName := acctest.RandomWithPrefix("test-api-key")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccAPIKeyResourceConfig_full(rName),
