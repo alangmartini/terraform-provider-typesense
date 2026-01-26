@@ -880,33 +880,3 @@ func (c *ServerClient) ListStopwordsSets(ctx context.Context) ([]StopwordsSet, e
 	return wrapper.Stopwords, nil
 }
 
-// ListAPIKeys retrieves all API keys
-func (c *ServerClient) ListAPIKeys(ctx context.Context) ([]APIKey, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/keys", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	c.setHeaders(req)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list API keys: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to list API keys: status %d, body: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	// The API returns {"keys": [...]}
-	var wrapper struct {
-		Keys []APIKey `json:"keys"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return wrapper.Keys, nil
-}
