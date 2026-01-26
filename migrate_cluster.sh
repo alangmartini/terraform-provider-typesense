@@ -70,11 +70,11 @@ for COLLECTION in $COLLECTION_NAMES; do
     if [ -s "$DOC_FILE" ]; then
         RESULT_FILE="$EXPORT_DIR/$COLLECTION/import_result.jsonl"
 
-        # Stream import - response goes directly to file, not memory
+        # Stream import - uses -T to stream file without loading into memory
         curl -s -X POST \
             -H "X-TYPESENSE-API-KEY: $TARGET_API_KEY" \
             -H "Content-Type: text/plain" \
-            --data-binary @"$DOC_FILE" \
+            -T "$DOC_FILE" \
             "$TARGET_PROTOCOL://$TARGET_HOST:$TARGET_PORT/collections/$COLLECTION/documents/import?action=upsert" \
             > "$RESULT_FILE"
 
