@@ -5,13 +5,13 @@ set -e
 # Exports all collections with documents from source cluster and imports to target cluster
 
 # Configuration via environment variables
-SOURCE_HOST="${SOURCE_HOST:?Set SOURCE_HOST}"
-SOURCE_API_KEY="${SOURCE_API_KEY:?Set SOURCE_API_KEY}"
+SOURCE_HOST="sl1n8ub6gvziopq4p-1.a1.typesense.net"
+SOURCE_API_KEY="IBZAimI1JYjk5ToXbFvpwJLpLmdGFJH9"
 SOURCE_PROTOCOL="${SOURCE_PROTOCOL:-https}"
 SOURCE_PORT="${SOURCE_PORT:-443}"
 
-TARGET_HOST="${TARGET_HOST:?Set TARGET_HOST}"
-TARGET_API_KEY="${TARGET_API_KEY:?Set TARGET_API_KEY}"
+TARGET_HOST="rd1ywsp7geluc9khp-1.a1.typesense.net"
+TARGET_API_KEY="9ycySOrlvHAK2yl7JSrXrlhjn1PrJU66"
 TARGET_PROTOCOL="${TARGET_PROTOCOL:-https}"
 TARGET_PORT="${TARGET_PORT:-443}"
 
@@ -68,17 +68,43 @@ for COLLECTION in $COLLECTION_NAMES; do
     # Import documents
     DOC_FILE="$EXPORT_DIR/$COLLECTION/documents.jsonl"
     if [ -s "$DOC_FILE" ]; then
-        RESULT=$(curl -s -X POST \
+        RESULT_FILE="$EXPORT_DIR/$COLLECTION/import_result.jsonl"
+
+        # Stream import - response goes directly to file, not memory
+        curl -s -X POST \
             -H "X-TYPESENSE-API-KEY: $TARGET_API_KEY" \
             -H "Content-Type: text/plain" \
             --data-binary @"$DOC_FILE" \
-            "$TARGET_PROTOCOL://$TARGET_HOST:$TARGET_PORT/collections/$COLLECTION/documents/import?action=upsert")
+            "$TARGET_PROTOCOL://$TARGET_HOST:$TARGET_PORT/collections/$COLLECTION/documents/import?action=upsert" \
+            > "$RESULT_FILE"
 
-        SUCCESS=$(echo "$RESULT" | grep -c '"success":true' || true)
-        FAIL=$(echo "$RESULT" | grep -c '"success":false' || true)
+        # Count results from file (memory efficient)
+        SUCCESS=$(grep -c '"success":true' "$RESULT_FILE" || true)
+        FAIL=$(grep -c '"success":false' "$RESULT_FILE" || true)
         echo "  $SUCCESS ok, $FAIL failed"
 
-        [ "$FAIL" -gt 0 ] && echo "$RESULT" | grep '"success":false' > "$EXPORT_DIR/$COLLECTION/errors.log"
+        if [ "$FAIL" -gt 0 ]; then
+            # Error summary
+            echo "  Error summary:"
+            grep '"success":false' "$RESULT_FILE" | jq -sr '
+                group_by(.error) |
+                map({error: .[0].error, count: length}) |
+                sort_by(-.count) |
+                .[] | "    \(.error) -> \(.count) documents"
+            '
+
+            # Save detailed errors
+            grep '"success":false' "$RESULT_FILE" | jq -r '
+                "---",
+                "Code: \(.code)",
+                "Error: \(.error)",
+                "Document ID: \(.document | fromjson | .id // "unknown")",
+                "Document: \(.document)"
+            ' > "$EXPORT_DIR/$COLLECTION/errors.log"
+        fi
+
+        # Clean up result file (optional - keep for debugging)
+        rm -f "$RESULT_FILE"
     fi
 done
 
