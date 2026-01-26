@@ -11,6 +11,7 @@ import (
 	"os"
 
 	"github.com/alanm/terraform-provider-typesense/cmd/generate"
+	"github.com/alanm/terraform-provider-typesense/cmd/migrate"
 	"github.com/alanm/terraform-provider-typesense/internal/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 )
@@ -40,6 +41,12 @@ func main() {
 		switch os.Args[1] {
 		case "generate":
 			if err := generate.Run(os.Args[2:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "migrate":
+			if err := migrate.Run(os.Args[2:]); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -79,12 +86,14 @@ Usage:
 
 Commands:
   generate    Generate Terraform configuration from existing Typesense resources
+  migrate     Import collections and documents to a target cluster
   version     Print version information
   help        Show this help message
 
 When run without a command, the provider starts in Terraform plugin mode.
 
-For generate command help:
+For command-specific help:
   terraform-provider-typesense generate --help
+  terraform-provider-typesense migrate --help
 `, version)
 }
