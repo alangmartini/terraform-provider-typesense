@@ -2,8 +2,37 @@
 
 A Terraform provider for managing [Typesense](https://typesense.org/) Cloud clusters and server resources. This provider allows you to define and manage your Typesense infrastructure as code.
 
+## Quick Start
+
+```bash
+# 1. Build the provider
+go build -o terraform-provider-typesense
+
+# 2. Install locally for Terraform
+mkdir -p ~/.terraform.d/plugins/registry.terraform.io/alanm/typesense/0.1.0/linux_amd64
+cp terraform-provider-typesense ~/.terraform.d/plugins/registry.terraform.io/alanm/typesense/0.1.0/linux_amd64/
+
+# 3. Set credentials (choose one)
+# Option A: For a real Typesense cluster
+export TYPESENSE_HOST="your-cluster.a1.typesense.net"
+export TYPESENSE_API_KEY="your-admin-api-key"
+
+# Option B: For local testing with Docker
+make start-typesense
+
+# 4. Try an example
+cd examples/complete
+terraform init
+terraform plan
+```
+
+**Prerequisites:** Go 1.21+, Terraform 1.0+, Docker (for local testing)
+
+---
+
 ## Table of Contents
 
+- [Quick Start](#quick-start)
 - [What is This Project?](#what-is-this-project)
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)

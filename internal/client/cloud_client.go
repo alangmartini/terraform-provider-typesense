@@ -315,34 +315,6 @@ func (c *CloudClient) DeleteClusterConfigChange(ctx context.Context, clusterID, 
 	return nil
 }
 
-// GenerateClusterAPIKeys generates new API keys for a cluster
-func (c *CloudClient) GenerateClusterAPIKeys(ctx context.Context, clusterID string) (*ClusterAPIKeys, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/clusters/"+clusterID+"/api-keys", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	c.setHeaders(req)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate API keys: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to generate API keys: status %d, body: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	var result ClusterAPIKeys
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
-
 func (c *CloudClient) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-TYPESENSE-CLOUD-MANAGEMENT-API-KEY", c.apiKey)
