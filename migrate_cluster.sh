@@ -13,7 +13,7 @@ SOURCE_PORT="443"
 
 # Target Cluster Configuration
 TARGET_HOST="rd1ywsp7geluc9khp-1.a1.typesense.net"
-TARGET_API_KEY="0kv1ZKvBxoFztet2qEV0zkQNevF4340X"
+TARGET_API_KEY="9ycySOrlvHAK2yl7JSrXrlhjn1PrJU66"
 TARGET_PROTOCOL="https"
 TARGET_PORT="443"
 
@@ -148,7 +148,14 @@ for COLLECTION in $COLLECTION_NAMES; do
 
         if [ "$FAIL_COUNT" -gt 0 ]; then
             log_warn "  Some documents failed to import. Check $EXPORT_DIR/$COLLECTION/import_errors.log"
-            echo "$IMPORT_RESULT" | grep '"success":false' > "$EXPORT_DIR/$COLLECTION/import_errors.log"
+            # Format errors for readability: code, error message, then document
+            echo "$IMPORT_RESULT" | grep '"success":false' | jq -r '
+                "---",
+                "Code: \(.code)",
+                "Error: \(.error)",
+                "Document ID: \(.document | fromjson | .id // .stockcode // "unknown")",
+                "Document: \(.document)"
+            ' > "$EXPORT_DIR/$COLLECTION/import_errors.log"
         fi
     else
         log_info "  No documents to import"
