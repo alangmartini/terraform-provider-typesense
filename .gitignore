@@ -19,6 +19,7 @@ typesense-test-data/
 
 # Sensitive files
 target_cluster.txt
+source_cluster.txt
 
 # IDE
 .idea/
