@@ -589,6 +589,47 @@ The generated configuration will include comments noting which API version was d
 
 ---
 
+## Data Migration Script
+
+For migrating documents between clusters, use the `migrate_cluster.sh` script. This exports all collections and documents from a source cluster and imports them to a target cluster.
+
+### Requirements
+
+- `curl` and `jq` installed
+- Admin API keys for both clusters
+
+### Usage
+
+```bash
+# Set environment variables
+export SOURCE_HOST="source-cluster.a1.typesense.net"
+export SOURCE_API_KEY="source-admin-key"
+export TARGET_HOST="target-cluster.a1.typesense.net"
+export TARGET_API_KEY="target-admin-key"
+
+# Run migration
+./migrate_cluster.sh
+```
+
+### Optional Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SOURCE_PROTOCOL` | `https` | Protocol for source cluster |
+| `SOURCE_PORT` | `443` | Port for source cluster |
+| `TARGET_PROTOCOL` | `https` | Protocol for target cluster |
+| `TARGET_PORT` | `443` | Port for target cluster |
+
+### What It Does
+
+1. **Export**: Fetches all collection schemas and documents from source
+2. **Import**: Creates collections in target (if not existing) and upserts documents
+3. **Output**: Saves export data to `./typesense_export_YYYYMMDD_HHMMSS/`
+
+Each collection gets a directory with `schema.json` and `documents.jsonl`. Failed imports are logged to `errors.log`.
+
+---
+
 ## Available Resources
 
 ### Cloud Management Resources
