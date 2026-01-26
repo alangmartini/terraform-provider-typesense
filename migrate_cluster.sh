@@ -148,8 +148,21 @@ for COLLECTION in $COLLECTION_NAMES; do
 
         if [ "$FAIL_COUNT" -gt 0 ]; then
             log_warn "  Some documents failed to import. Check $EXPORT_DIR/$COLLECTION/import_errors.log"
+
+            # Show error summary grouped by error message
+            log_info "  Error summary:"
+            ERRORS_JSON=$(echo "$IMPORT_RESULT" | grep '"success":false')
+            echo "$ERRORS_JSON" | jq -sr '
+                group_by(.error) |
+                map({error: .[0].error, count: length}) |
+                sort_by(-.count) |
+                .[] | "    \(.error) -> \(.count) documents"
+            ' | while IFS= read -r line; do
+                log_info "$line"
+            done
+
             # Format errors for readability: code, error message, then document
-            echo "$IMPORT_RESULT" | grep '"success":false' | jq -r '
+            echo "$ERRORS_JSON" | jq -r '
                 "---",
                 "Code: \(.code)",
                 "Error: \(.error)",
