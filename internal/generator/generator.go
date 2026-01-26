@@ -24,6 +24,9 @@ type Config struct {
 
 	// Output settings
 	OutputDir string
+
+	// Data export settings
+	IncludeData bool
 }
 
 // Generator handles the Terraform configuration generation
@@ -185,6 +188,13 @@ func (g *Generator) generateCollections(ctx context.Context, f *hclwrite.File, r
 			ResourceName: resourceName,
 			ImportID:     CollectionImportID(collection.Name),
 		})
+
+		// Export documents if data export is enabled
+		if g.config.IncludeData {
+			if err := g.exportDocuments(ctx, collection.Name); err != nil {
+				return fmt.Errorf("failed to export documents for collection %s: %w", collection.Name, err)
+			}
+		}
 	}
 
 	return nil

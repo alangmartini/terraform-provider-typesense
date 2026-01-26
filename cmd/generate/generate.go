@@ -26,6 +26,9 @@ func Run(args []string) error {
 	// Output flags
 	output := fs.String("output", "./generated", "Output directory for generated files")
 
+	// Data export flags
+	includeData := fs.Bool("include-data", false, "Export document data to JSONL files for migration")
+
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage: terraform-provider-typesense generate [options]
 
@@ -51,6 +54,12 @@ Examples:
     --host=my-cluster.typesense.net --port=443 --protocol=https --api-key=xyz \
     --cloud-api-key=abc123 \
     --output=./generated
+
+  # Export config + document data for migration
+  terraform-provider-typesense generate \
+    --host=source.typesense.net --port=443 --protocol=https --api-key=xyz \
+    --include-data \
+    --output=./migration
 `)
 	}
 
@@ -79,6 +88,7 @@ Examples:
 		APIKey:      *apiKey,
 		CloudAPIKey: *cloudAPIKey,
 		OutputDir:   *output,
+		IncludeData: *includeData,
 	}
 
 	// Run generator
@@ -92,6 +102,9 @@ Examples:
 		fmt.Printf("  Cloud: Typesense Cloud API\n")
 	}
 	fmt.Printf("  Output: %s\n", *output)
+	if *includeData {
+		fmt.Printf("  Include data: yes (documents will be exported to data/ subdirectory)\n")
+	}
 	fmt.Println()
 
 	ctx := context.Background()
@@ -102,13 +115,25 @@ Examples:
 	fmt.Printf("Generated files:\n")
 	fmt.Printf("  %s/main.tf     - Terraform configuration\n", *output)
 	fmt.Printf("  %s/imports.sh  - Import commands script\n", *output)
+	if *includeData {
+		fmt.Printf("  %s/data/*.jsonl - Document data files\n", *output)
+	}
 	fmt.Println()
-	fmt.Printf("Next steps:\n")
-	fmt.Printf("  1. cd %s\n", *output)
-	fmt.Printf("  2. Review and update main.tf (especially API key placeholder)\n")
-	fmt.Printf("  3. terraform init\n")
-	fmt.Printf("  4. ./imports.sh  # Import existing resources\n")
-	fmt.Printf("  5. terraform plan  # Should show no changes\n")
+
+	if *includeData {
+		fmt.Printf("Next steps (migration):\n")
+		fmt.Printf("  1. terraform-provider-typesense migrate \\\n")
+		fmt.Printf("       --source-dir=%s \\\n", *output)
+		fmt.Printf("       --target-host=TARGET_HOST --target-port=443 --target-protocol=https \\\n")
+		fmt.Printf("       --target-api-key=TARGET_API_KEY\n")
+	} else {
+		fmt.Printf("Next steps:\n")
+		fmt.Printf("  1. cd %s\n", *output)
+		fmt.Printf("  2. Review and update main.tf (especially API key placeholder)\n")
+		fmt.Printf("  3. terraform init\n")
+		fmt.Printf("  4. ./imports.sh  # Import existing resources\n")
+		fmt.Printf("  5. terraform plan  # Should show no changes\n")
+	}
 
 	return nil
 }
