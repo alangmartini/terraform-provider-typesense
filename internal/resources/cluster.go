@@ -195,12 +195,18 @@ func (r *ClusterResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	// Preserve API keys from creation response (GetCluster doesn't return them)
+	apiKeys := created.APIKeys
+
 	// Wait for cluster to be ready (up to 15 minutes)
 	ready, err := r.client.WaitForClusterReady(ctx, created.ID, 15*time.Minute)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Error waiting for cluster to be ready: %s", err))
 		return
 	}
+
+	// Restore API keys since GetCluster doesn't return them
+	ready.APIKeys = apiKeys
 
 	r.updateModelFromCluster(&data, ready)
 
@@ -216,6 +222,10 @@ func (r *ClusterResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
+	// Preserve API keys from state (GetCluster doesn't return them)
+	adminAPIKey := data.AdminAPIKey
+	searchAPIKey := data.SearchAPIKey
+
 	cluster, err := r.client.GetCluster(ctx, data.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read cluster: %s", err))
@@ -229,13 +239,23 @@ func (r *ClusterResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	r.updateModelFromCluster(&data, cluster)
 
+	// Restore API keys from state since GetCluster doesn't return them
+	if !adminAPIKey.IsNull() && data.AdminAPIKey.IsNull() {
+		data.AdminAPIKey = adminAPIKey
+	}
+	if !searchAPIKey.IsNull() && data.SearchAPIKey.IsNull() {
+		data.SearchAPIKey = searchAPIKey
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *ClusterResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data ClusterResourceModel
+	var state ClusterResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 
 	if resp.Diagnostics.HasError() {
 		return
@@ -255,6 +275,14 @@ func (r *ClusterResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	r.updateModelFromCluster(&data, updated)
+
+	// Restore API keys from state since UpdateCluster doesn't return them
+	if !state.AdminAPIKey.IsNull() && data.AdminAPIKey.IsNull() {
+		data.AdminAPIKey = state.AdminAPIKey
+	}
+	if !state.SearchAPIKey.IsNull() && data.SearchAPIKey.IsNull() {
+		data.SearchAPIKey = state.SearchAPIKey
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
