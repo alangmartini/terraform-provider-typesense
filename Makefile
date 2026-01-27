@@ -1,4 +1,5 @@
-.PHONY: test test-acc start-typesense stop-typesense build clean
+.PHONY: test test-acc start-typesense stop-typesense build clean \
+	testbed-up testbed-down testbed-seed testbed-e2e testbed-verify testbed-clean
 
 # Configuration
 TYPESENSE_API_KEY := test-api-key-for-acceptance-tests
@@ -77,3 +78,51 @@ clean:
 	@rm -f terraform-provider-typesense
 	@rm -rf typesense-test-data
 	@echo "✓ Clean complete!"
+
+# ==============================================================================
+# E2E Testbed Targets
+# ==============================================================================
+
+# Testbed configuration
+TESTBED_DIR := $(PWD)/testbed
+TESTBED_COMPOSE := $(TESTBED_DIR)/docker-compose.yml
+
+# Start both source and target Typesense clusters
+testbed-up:
+	@echo "Starting E2E testbed clusters..."
+	@docker compose -f $(TESTBED_COMPOSE) up -d
+	@echo "Waiting for clusters to be healthy..."
+	@until curl -sf http://localhost:8108/health > /dev/null 2>&1; do sleep 2; done
+	@until curl -sf http://localhost:8109/health > /dev/null 2>&1; do sleep 2; done
+	@echo ""
+	@echo "✓ Testbed clusters are ready!"
+	@echo "  Source: http://localhost:8108 (API key: source-test-api-key)"
+	@echo "  Target: http://localhost:8109 (API key: target-test-api-key)"
+
+# Stop and remove testbed clusters with volumes
+testbed-down:
+	@echo "Stopping E2E testbed clusters..."
+	@docker compose -f $(TESTBED_COMPOSE) down -v
+	@echo "✓ Testbed stopped and cleaned!"
+
+# Seed the source cluster with test fixtures
+testbed-seed:
+	@echo "Seeding source cluster with test data..."
+	@$(TESTBED_DIR)/scripts/seed-source.sh
+
+# Run complete E2E test workflow
+testbed-e2e:
+	@echo "Running complete E2E test..."
+	@$(TESTBED_DIR)/scripts/run-e2e-test.sh
+
+# Verify migration between source and target
+testbed-verify:
+	@echo "Verifying migration..."
+	@$(TESTBED_DIR)/scripts/verify-migration.sh
+
+# Clean all testbed data (containers, volumes, exports)
+testbed-clean:
+	@echo "Cleaning all testbed data..."
+	@docker compose -f $(TESTBED_COMPOSE) down -v 2>/dev/null || true
+	@rm -rf $(TESTBED_DIR)/export
+	@echo "✓ Testbed cleaned!"

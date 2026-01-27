@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  typesense-source:
+    image: typesense/typesense:29.0.rc30
+    container_name: testbed-source
+    ports:
+      - "8108:8108"
+    volumes:
+      - typesense-source-data:/data
+    command: >
+      --data-dir=/data
+      --api-key=source-test-api-key
+      --enable-cors
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8108/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  typesense-target:
+    image: typesense/typesense:29.0.rc30
+    container_name: testbed-target
+    ports:
+      - "8109:8108"
+    volumes:
+      - typesense-target-data:/data
+    command: >
+      --data-dir=/data
+      --api-key=target-test-api-key
+      --enable-cors
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8108/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  typesense-source-data:
+  typesense-target-data:

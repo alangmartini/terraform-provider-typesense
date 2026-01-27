@@ -1,0 +1,25 @@
+{
+  "name": "edge_cases",
+  "fields": [
+    {"name": "id", "type": "string"},
+    {"name": "test_case_name", "type": "string"},
+    {"name": "unicode_text", "type": "string"},
+    {"name": "special_chars_text", "type": "string", "optional": true},
+    {"name": "empty_allowed_string", "type": "string", "optional": true},
+    {"name": "large_text_field", "type": "string", "optional": true},
+    {"name": "long_array", "type": "string[]", "optional": true},
+    {"name": "float_precision", "type": "float"},
+    {"name": "max_int32", "type": "int32"},
+    {"name": "large_int64", "type": "int64"},
+    {"name": "near_pole_location", "type": "geopoint", "optional": true},
+    {"name": "near_dateline_location", "type": "geopoint", "optional": true},
+    {"name": "bool_field", "type": "bool"},
+    {"name": "optional_bool", "type": "bool", "optional": true},
+    {"name": "optional_int", "type": "int32", "optional": true},
+    {"name": "optional_float", "type": "float", "optional": true},
+    {"name": "optional_array", "type": "string[]", "optional": true},
+    {"name": "category", "type": "string", "facet": true},
+    {"name": "created_at", "type": "int64"}
+  ],
+  "default_sorting_field": "created_at"
+}

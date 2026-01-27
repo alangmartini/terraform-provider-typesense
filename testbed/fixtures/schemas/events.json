@@ -1,0 +1,26 @@
+{
+  "name": "events",
+  "fields": [
+    {"name": "id", "type": "string"},
+    {"name": "name", "type": "string"},
+    {"name": "description", "type": "string"},
+    {"name": "venue_name", "type": "string"},
+    {"name": "venue_address", "type": "string"},
+    {"name": "location", "type": "geopoint"},
+    {"name": "event_type", "type": "string", "facet": true},
+    {"name": "categories", "type": "string[]", "facet": true},
+    {"name": "organizer_id", "type": "string"},
+    {"name": "organizer_name", "type": "string"},
+    {"name": "capacity", "type": "int32", "optional": true},
+    {"name": "registered_count", "type": "int32"},
+    {"name": "ticket_price", "type": "float", "optional": true},
+    {"name": "is_free", "type": "bool", "facet": true},
+    {"name": "is_virtual", "type": "bool", "facet": true},
+    {"name": "timezone", "type": "string"},
+    {"name": "start_timestamp", "type": "int64"},
+    {"name": "end_timestamp", "type": "int64"},
+    {"name": "registration_deadline", "type": "int64", "optional": true},
+    {"name": "created_at", "type": "int64"}
+  ],
+  "default_sorting_field": "start_timestamp"
+}

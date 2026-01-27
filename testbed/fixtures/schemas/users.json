@@ -1,0 +1,23 @@
+{
+  "name": "users",
+  "fields": [
+    {"name": "id", "type": "string"},
+    {"name": "username", "type": "string"},
+    {"name": "display_name", "type": "string"},
+    {"name": "email", "type": "string"},
+    {"name": "bio", "type": "string", "optional": true},
+    {"name": "locale", "type": "string", "facet": true},
+    {"name": "timezone", "type": "string"},
+    {"name": "roles", "type": "string[]", "facet": true},
+    {"name": "permissions", "type": "string[]", "optional": true},
+    {"name": "age", "type": "int32", "optional": true},
+    {"name": "verified", "type": "bool", "facet": true},
+    {"name": "reputation_score", "type": "float", "optional": true},
+    {"name": "follower_count", "type": "int32"},
+    {"name": "following_count", "type": "int32"},
+    {"name": "location", "type": "geopoint", "optional": true},
+    {"name": "joined_at", "type": "int64"},
+    {"name": "last_active_at", "type": "int64", "optional": true}
+  ],
+  "default_sorting_field": "joined_at"
+}
