@@ -589,44 +589,114 @@ The generated configuration will include comments noting which API version was d
 
 ---
 
-## Data Migration Script
+## Cluster-to-Cluster Migration
 
-For migrating documents between clusters, use the `migrate_cluster.sh` script. This exports all collections and documents from a source cluster and imports them to a target cluster.
+The provider includes built-in commands for migrating collections and documents between Typesense clusters. This is useful for:
 
-### Requirements
+- **Migrating to a new cluster** (e.g., upgrading infrastructure)
+- **Cloning environments** (e.g., production → staging)
+- **Disaster recovery** (backup and restore)
 
-- `curl` and `jq` installed
-- Admin API keys for both clusters
+### Migration Workflow
 
-### Usage
+#### Step 1: Export from Source Cluster
+
+Use the `generate` command with `--include-data` to export both configuration and documents:
 
 ```bash
-# Set environment variables
-export SOURCE_HOST="source-cluster.a1.typesense.net"
-export SOURCE_API_KEY="source-admin-key"
-export TARGET_HOST="target-cluster.a1.typesense.net"
-export TARGET_API_KEY="target-admin-key"
-
-# Run migration
-./migrate_cluster.sh
+./terraform-provider-typesense generate \
+  --host=source-cluster.a1.typesense.net \
+  --port=443 \
+  --protocol=https \
+  --api-key=$SOURCE_API_KEY \
+  --include-data \
+  --output=./migration
 ```
 
-### Optional Variables
+This creates:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SOURCE_PROTOCOL` | `https` | Protocol for source cluster |
-| `SOURCE_PORT` | `443` | Port for source cluster |
-| `TARGET_PROTOCOL` | `https` | Protocol for target cluster |
-| `TARGET_PORT` | `443` | Port for target cluster |
+```
+./migration/
+├── main.tf              # Terraform configuration
+├── imports.sh           # Import commands for Terraform state
+└── data/
+    ├── products.schema.json    # Collection schema
+    ├── products.jsonl          # Document data (JSONL format)
+    ├── orders.schema.json
+    └── orders.jsonl
+```
 
-### What It Does
+#### Step 2: Import to Target Cluster
 
-1. **Export**: Fetches all collection schemas and documents from source
-2. **Import**: Creates collections in target (if not existing) and upserts documents
-3. **Output**: Saves export data to `./typesense_export_YYYYMMDD_HHMMSS/`
+Use the `migrate` command to import everything to the target:
 
-Each collection gets a directory with `schema.json` and `documents.jsonl`. Failed imports are logged to `errors.log`.
+```bash
+./terraform-provider-typesense migrate \
+  --source-dir=./migration \
+  --target-host=target-cluster.a1.typesense.net \
+  --target-port=443 \
+  --target-protocol=https \
+  --target-api-key=$TARGET_API_KEY
+```
+
+The migrate command:
+1. Creates collections on the target (if they don't exist)
+2. Streams documents from JSONL files using chunked transfer
+3. Reports success/failure counts for each collection
+
+### Migrate Command Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--source-dir` | (required) | Directory containing exported data |
+| `--target-host` | (required) | Target cluster hostname |
+| `--target-api-key` | (required) | Target cluster admin API key |
+| `--target-port` | `8108` | Target cluster port |
+| `--target-protocol` | `http` | Target cluster protocol (http/https) |
+
+### Example: Full Migration
+
+```bash
+# 1. Build the provider
+go build -o terraform-provider-typesense
+
+# 2. Export from production (config + data)
+./terraform-provider-typesense generate \
+  --host=prod.typesense.net --port=443 --protocol=https \
+  --api-key=$PROD_API_KEY \
+  --include-data \
+  --output=./prod-backup
+
+# 3. Import to staging
+./terraform-provider-typesense migrate \
+  --source-dir=./prod-backup \
+  --target-host=staging.typesense.net --target-port=443 --target-protocol=https \
+  --target-api-key=$STAGING_API_KEY
+```
+
+### Memory Efficiency
+
+Both export and import operations use streaming to handle large collections without loading everything into memory:
+
+- **Export**: Documents are streamed directly from the API to JSONL files
+- **Import**: Documents are streamed from JSONL files to the target API
+
+This allows migrating collections with millions of documents without running out of memory.
+
+### Troubleshooting Migration
+
+**"data directory not found" error:**
+- Ensure you ran `generate` with `--include-data` flag
+- Check that the `--source-dir` path is correct
+
+**Collection already exists on target:**
+- The migrate command skips collection creation if it already exists
+- Documents are upserted (updated or inserted)
+
+**Some documents failed to import:**
+- Check the console output for failure counts
+- Common causes: schema mismatch, invalid document format
+- Verify the target collection schema matches the source
 
 ---
 

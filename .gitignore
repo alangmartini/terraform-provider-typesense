@@ -16,6 +16,12 @@ exported/
 
 # Test data
 typesense-test-data/
+*_export_*
+*_temp_*
+
+# E2E Testbed
+testbed/export/
+testbed/fixtures/*.jsonl
 
 # Sensitive files
 target_cluster.txt
