@@ -9,7 +9,9 @@ import (
 	"github.com/alanm/terraform-provider-typesense/internal/client"
 	"github.com/alanm/terraform-provider-typesense/internal/resources"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
+	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -103,6 +105,17 @@ func (p *TypesenseProvider) Configure(ctx context.Context, req provider.Configur
 	// Configure Server client if host and API key are provided
 	if serverHost != "" && serverAPIKey != "" {
 		providerData.ServerClient = client.NewServerClient(serverHost, serverAPIKey, int(serverPort), serverProtocol)
+
+		// Detect server version for feature-aware API selection
+		serverVersion, featureChecker, versionDiag := detectServerVersion(ctx, providerData.ServerClient)
+		if versionDiag != nil {
+			resp.Diagnostics.Append(versionDiag)
+		}
+		providerData.ServerVersion = serverVersion
+		providerData.FeatureChecker = featureChecker
+	} else {
+		// No server client, use fallback feature checker
+		providerData.FeatureChecker = version.NewFallbackFeatureChecker()
 	}
 
 	resp.DataSourceData = providerData
@@ -163,4 +176,35 @@ func getInt64Value(tfValue types.Int64, envVar string, defaultValue int64) int64
 		}
 	}
 	return defaultValue
+}
+
+// detectServerVersion queries the server for version information and creates
+// an appropriate FeatureChecker. On failure, it returns a warning diagnostic
+// and a FallbackFeatureChecker that allows runtime detection via 404 handling.
+func detectServerVersion(ctx context.Context, serverClient *client.ServerClient) (*version.Version, version.FeatureChecker, diag.Diagnostic) {
+	info, err := serverClient.GetServerInfo(ctx)
+	if err != nil {
+		// Version detection failed - use fallback checker
+		// This is a warning, not an error, because resources can still
+		// fall back to runtime detection via 404 handling
+		return nil, version.NewFallbackFeatureChecker(), diag.NewWarningDiagnostic(
+			"Could not detect Typesense server version",
+			"Failed to retrieve server version information. The provider will use "+
+				"runtime detection for version-specific features. Error: "+err.Error(),
+		)
+	}
+
+	serverVersion, err := version.Parse(info.Version)
+	if err != nil {
+		// Version parsing failed - use fallback checker
+		return nil, version.NewFallbackFeatureChecker(), diag.NewWarningDiagnostic(
+			"Could not parse Typesense server version",
+			"The server returned an unexpected version format: "+info.Version+". "+
+				"The provider will use runtime detection for version-specific features. "+
+				"Error: "+err.Error(),
+		)
+	}
+
+	// Successfully detected version - create proper feature checker
+	return serverVersion, version.NewFeatureChecker(serverVersion), nil
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 )
 
@@ -31,15 +32,18 @@ type Config struct {
 
 // Generator handles the Terraform configuration generation
 type Generator struct {
-	config       *Config
-	serverClient *client.ServerClient
-	cloudClient  *client.CloudClient
+	config         *Config
+	serverClient   *client.ServerClient
+	cloudClient    *client.CloudClient
+	serverVersion  *version.Version
+	featureChecker version.FeatureChecker
 }
 
 // New creates a new Generator with the given configuration
 func New(cfg *Config) *Generator {
 	g := &Generator{
-		config: cfg,
+		config:         cfg,
+		featureChecker: version.NewFallbackFeatureChecker(),
 	}
 
 	if cfg.Host != "" && cfg.APIKey != "" {
@@ -51,6 +55,32 @@ func New(cfg *Config) *Generator {
 	}
 
 	return g
+}
+
+// DetectServerVersion queries the server and detects the version for feature-aware API selection.
+// This should be called before Generate() for optimal API selection.
+// On failure, it logs a warning and the generator will fall back to runtime detection.
+func (g *Generator) DetectServerVersion(ctx context.Context) error {
+	if g.serverClient == nil {
+		return nil
+	}
+
+	info, err := g.serverClient.GetServerInfo(ctx)
+	if err != nil {
+		// Continue with fallback behavior
+		fmt.Fprintf(os.Stderr, "Warning: Could not detect Typesense server version: %v\n", err)
+		return nil
+	}
+
+	serverVersion, err := version.Parse(info.Version)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Could not parse Typesense server version %q: %v\n", info.Version, err)
+		return nil
+	}
+
+	g.serverVersion = serverVersion
+	g.featureChecker = version.NewFeatureChecker(serverVersion)
+	return nil
 }
 
 // Generate reads all resources and generates Terraform configuration
@@ -189,10 +219,21 @@ func (g *Generator) generateCollections(ctx context.Context, f *hclwrite.File, r
 			ImportID:     CollectionImportID(collection.Name),
 		})
 
-		// Export documents if data export is enabled
+		// Export documents, synonyms, and overrides if data export is enabled
 		if g.config.IncludeData {
 			if err := g.exportDocuments(ctx, collection.Name); err != nil {
 				return fmt.Errorf("failed to export documents for collection %s: %w", collection.Name, err)
+			}
+
+			// Export synonyms for this collection
+			dataDir := filepath.Join(g.config.OutputDir, "data")
+			if err := g.exportSynonyms(ctx, collection.Name, dataDir); err != nil {
+				return fmt.Errorf("failed to export synonyms for collection %s: %w", collection.Name, err)
+			}
+
+			// Export overrides for this collection
+			if err := g.exportOverrides(ctx, collection.Name, dataDir); err != nil {
+				return fmt.Errorf("failed to export overrides for collection %s: %w", collection.Name, err)
 			}
 		}
 	}
@@ -204,6 +245,14 @@ func (g *Generator) generateStopwords(ctx context.Context, f *hclwrite.File, res
 	stopwordsSets, err := g.serverClient.ListStopwordsSets(ctx)
 	if err != nil {
 		return err
+	}
+
+	// Export stopwords data if data export is enabled (even if empty, creates the file)
+	if g.config.IncludeData && len(stopwordsSets) > 0 {
+		dataDir := filepath.Join(g.config.OutputDir, "data")
+		if err := g.exportStopwordsSets(ctx, dataDir); err != nil {
+			return fmt.Errorf("failed to export stopwords sets: %w", err)
+		}
 	}
 
 	if len(stopwordsSets) == 0 {
@@ -232,43 +281,58 @@ func (g *Generator) generateStopwords(ctx context.Context, f *hclwrite.File, res
 }
 
 func (g *Generator) generateSynonyms(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, collectionResourceMap map[string]string, importCommands *[]ImportCommand) error {
-	var allSynonyms []struct {
-		synonym        client.Synonym
-		collectionName string
+	// Use version-aware API selection
+	if g.featureChecker.SupportsFeature(version.FeatureSynonymSets) {
+		return g.generateSynonymSetsV30(ctx, f, resourceNames)
 	}
 
-	// First try the new synonym_sets API (Typesense v30.0+)
+	// For v29 and earlier, or when version detection failed (fallback)
+	// Try per-collection synonyms first, fall back to synonym_sets if 404
+	return g.generatePerCollectionSynonyms(ctx, f, resourceNames, collectionResourceMap, importCommands)
+}
+
+// generateSynonymSetsV30 handles synonym generation for Typesense v30.0+ using the /synonym_sets API
+func (g *Generator) generateSynonymSetsV30(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool) error {
 	synonymSets, err := g.serverClient.ListSynonymSets(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list synonym sets: %w", err)
 	}
 
-	if synonymSets != nil {
-		// Using Typesense v30.0+ API - synonym sets are system-level, not per-collection
-		if len(synonymSets) == 0 {
-			return nil
-		}
-
-		// Add section header
-		f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
-			{Type: 4, Bytes: []byte("# ============================================\n# SYNONYM SETS (Typesense v30.0+)\n# Note: Synonym sets are now system-level, not per-collection\n# ============================================\n\n")},
-		})
-
-		for _, synSet := range synonymSets {
-			resourceName := MakeUniqueResourceName("synonym_set_"+synSet.Name, resourceNames)
-			// TODO: Generate synonym set blocks when the Terraform resource is implemented
-			// For now, add a comment noting the synonym set exists
-			comment := fmt.Sprintf("# Synonym set: %s (Terraform resource not yet implemented)\n\n", synSet.Name)
-			f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
-				{Type: 4, Bytes: []byte(comment)},
-			})
-			_ = resourceName // Silence unused variable warning
-		}
-
+	if len(synonymSets) == 0 {
 		return nil
 	}
 
-	// Fallback to old per-collection synonyms API (Typesense v29 and earlier)
+	// Add section header with version info
+	versionStr := ""
+	if g.serverVersion != nil {
+		versionStr = fmt.Sprintf(" (detected server: v%s)", g.serverVersion.String())
+	}
+	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte(fmt.Sprintf("# ============================================\n# SYNONYM SETS (Typesense v30.0+)%s\n# Note: Synonym sets are now system-level, not per-collection\n# ============================================\n\n", versionStr))},
+	})
+
+	for _, synSet := range synonymSets {
+		resourceName := MakeUniqueResourceName("synonym_set_"+synSet.Name, resourceNames)
+		// TODO: Generate synonym set blocks when the Terraform resource is implemented
+		// For now, add a comment noting the synonym set exists
+		comment := fmt.Sprintf("# Synonym set: %s (Terraform resource not yet implemented)\n\n", synSet.Name)
+		f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+			{Type: 4, Bytes: []byte(comment)},
+		})
+		_ = resourceName // Silence unused variable warning
+	}
+
+	return nil
+}
+
+// generatePerCollectionSynonyms handles synonym generation for Typesense v29 and earlier
+// using the /collections/{name}/synonyms API
+func (g *Generator) generatePerCollectionSynonyms(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, collectionResourceMap map[string]string, importCommands *[]ImportCommand) error {
+	var allSynonyms []struct {
+		synonym        client.Synonym
+		collectionName string
+	}
+
 	collections, err := g.serverClient.ListCollections(ctx)
 	if err != nil {
 		return err
@@ -279,6 +343,9 @@ func (g *Generator) generateSynonyms(ctx context.Context, f *hclwrite.File, reso
 		if err != nil {
 			return fmt.Errorf("failed to list synonyms for collection %s: %w", collection.Name, err)
 		}
+
+		// If we get an empty list and version detection failed, it might be a v30+ server
+		// The ListSynonyms method already handles 404 gracefully
 		for _, syn := range synonyms {
 			allSynonyms = append(allSynonyms, struct {
 				synonym        client.Synonym
@@ -288,12 +355,20 @@ func (g *Generator) generateSynonyms(ctx context.Context, f *hclwrite.File, reso
 	}
 
 	if len(allSynonyms) == 0 {
+		// If version detection failed and we got no synonyms, try the v30 API as fallback
+		if g.serverVersion == nil {
+			return g.generateSynonymSetsV30Fallback(ctx, f, resourceNames)
+		}
 		return nil
 	}
 
-	// Add section header
+	// Add section header with version info
+	versionStr := ""
+	if g.serverVersion != nil {
+		versionStr = fmt.Sprintf(" (detected server: v%s)", g.serverVersion.String())
+	}
 	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
-		{Type: 4, Bytes: []byte("# ============================================\n# SYNONYMS\n# ============================================\n\n")},
+		{Type: 4, Bytes: []byte(fmt.Sprintf("# ============================================\n# SYNONYMS%s\n# ============================================\n\n", versionStr))},
 	})
 
 	for _, item := range allSynonyms {
@@ -313,39 +388,79 @@ func (g *Generator) generateSynonyms(ctx context.Context, f *hclwrite.File, reso
 	return nil
 }
 
+// generateSynonymSetsV30Fallback tries the v30 API when version detection failed
+// and per-collection synonyms returned nothing
+func (g *Generator) generateSynonymSetsV30Fallback(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool) error {
+	synonymSets, err := g.serverClient.ListSynonymSets(ctx)
+	if err != nil || synonymSets == nil || len(synonymSets) == 0 {
+		// Either failed or no synonym sets - that's fine
+		return nil
+	}
+
+	// Found synonym sets via fallback
+	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte("# ============================================\n# SYNONYM SETS (Typesense v30.0+)\n# Note: Synonym sets are now system-level, not per-collection\n# ============================================\n\n")},
+	})
+
+	for _, synSet := range synonymSets {
+		resourceName := MakeUniqueResourceName("synonym_set_"+synSet.Name, resourceNames)
+		comment := fmt.Sprintf("# Synonym set: %s (Terraform resource not yet implemented)\n\n", synSet.Name)
+		f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+			{Type: 4, Bytes: []byte(comment)},
+		})
+		_ = resourceName
+	}
+
+	return nil
+}
+
 func (g *Generator) generateOverrides(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, collectionResourceMap map[string]string, importCommands *[]ImportCommand) error {
-	// First try the new curation_sets API (Typesense v30.0+)
+	// Use version-aware API selection
+	if g.featureChecker.SupportsFeature(version.FeatureCurationSets) {
+		return g.generateCurationSetsV30(ctx, f, resourceNames)
+	}
+
+	// For v29 and earlier, or when version detection failed (fallback)
+	return g.generatePerCollectionOverrides(ctx, f, resourceNames, collectionResourceMap, importCommands)
+}
+
+// generateCurationSetsV30 handles override generation for Typesense v30.0+ using the /curation_sets API
+func (g *Generator) generateCurationSetsV30(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool) error {
 	curationSets, err := g.serverClient.ListCurationSets(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list curation sets: %w", err)
 	}
 
-	if curationSets != nil {
-		// Using Typesense v30.0+ API - curation sets are system-level, not per-collection
-		if len(curationSets) == 0 {
-			return nil
-		}
-
-		// Add section header
-		f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
-			{Type: 4, Bytes: []byte("# ============================================\n# CURATION SETS (Typesense v30.0+)\n# Note: Curation sets (formerly overrides) are now system-level, not per-collection\n# ============================================\n\n")},
-		})
-
-		for _, curSet := range curationSets {
-			resourceName := MakeUniqueResourceName("curation_set_"+curSet.Name, resourceNames)
-			// TODO: Generate curation set blocks when the Terraform resource is implemented
-			// For now, add a comment noting the curation set exists
-			comment := fmt.Sprintf("# Curation set: %s (Terraform resource not yet implemented)\n\n", curSet.Name)
-			f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
-				{Type: 4, Bytes: []byte(comment)},
-			})
-			_ = resourceName // Silence unused variable warning
-		}
-
+	if len(curationSets) == 0 {
 		return nil
 	}
 
-	// Fallback to old per-collection overrides API (Typesense v29 and earlier)
+	// Add section header with version info
+	versionStr := ""
+	if g.serverVersion != nil {
+		versionStr = fmt.Sprintf(" (detected server: v%s)", g.serverVersion.String())
+	}
+	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte(fmt.Sprintf("# ============================================\n# CURATION SETS (Typesense v30.0+)%s\n# Note: Curation sets (formerly overrides) are now system-level, not per-collection\n# ============================================\n\n", versionStr))},
+	})
+
+	for _, curSet := range curationSets {
+		resourceName := MakeUniqueResourceName("curation_set_"+curSet.Name, resourceNames)
+		// TODO: Generate curation set blocks when the Terraform resource is implemented
+		// For now, add a comment noting the curation set exists
+		comment := fmt.Sprintf("# Curation set: %s (Terraform resource not yet implemented)\n\n", curSet.Name)
+		f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+			{Type: 4, Bytes: []byte(comment)},
+		})
+		_ = resourceName // Silence unused variable warning
+	}
+
+	return nil
+}
+
+// generatePerCollectionOverrides handles override generation for Typesense v29 and earlier
+// using the /collections/{name}/overrides API
+func (g *Generator) generatePerCollectionOverrides(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, collectionResourceMap map[string]string, importCommands *[]ImportCommand) error {
 	var allOverrides []struct {
 		override       client.Override
 		collectionName string
@@ -361,6 +476,9 @@ func (g *Generator) generateOverrides(ctx context.Context, f *hclwrite.File, res
 		if err != nil {
 			return fmt.Errorf("failed to list overrides for collection %s: %w", collection.Name, err)
 		}
+
+		// If we get an empty list and version detection failed, it might be a v30+ server
+		// The ListOverrides method already handles 404 gracefully
 		for _, ovr := range overrides {
 			allOverrides = append(allOverrides, struct {
 				override       client.Override
@@ -370,12 +488,20 @@ func (g *Generator) generateOverrides(ctx context.Context, f *hclwrite.File, res
 	}
 
 	if len(allOverrides) == 0 {
+		// If version detection failed and we got no overrides, try the v30 API as fallback
+		if g.serverVersion == nil {
+			return g.generateCurationSetsV30Fallback(ctx, f, resourceNames)
+		}
 		return nil
 	}
 
-	// Add section header
+	// Add section header with version info
+	versionStr := ""
+	if g.serverVersion != nil {
+		versionStr = fmt.Sprintf(" (detected server: v%s)", g.serverVersion.String())
+	}
 	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
-		{Type: 4, Bytes: []byte("# ============================================\n# OVERRIDES\n# ============================================\n\n")},
+		{Type: 4, Bytes: []byte(fmt.Sprintf("# ============================================\n# OVERRIDES%s\n# ============================================\n\n", versionStr))},
 	})
 
 	for _, item := range allOverrides {
@@ -390,6 +516,32 @@ func (g *Generator) generateOverrides(ctx context.Context, f *hclwrite.File, res
 			ResourceName: resourceName,
 			ImportID:     OverrideImportID(item.collectionName, item.override.ID),
 		})
+	}
+
+	return nil
+}
+
+// generateCurationSetsV30Fallback tries the v30 API when version detection failed
+// and per-collection overrides returned nothing
+func (g *Generator) generateCurationSetsV30Fallback(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool) error {
+	curationSets, err := g.serverClient.ListCurationSets(ctx)
+	if err != nil || curationSets == nil || len(curationSets) == 0 {
+		// Either failed or no curation sets - that's fine
+		return nil
+	}
+
+	// Found curation sets via fallback
+	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte("# ============================================\n# CURATION SETS (Typesense v30.0+)\n# Note: Curation sets (formerly overrides) are now system-level, not per-collection\n# ============================================\n\n")},
+	})
+
+	for _, curSet := range curationSets {
+		resourceName := MakeUniqueResourceName("curation_set_"+curSet.Name, resourceNames)
+		comment := fmt.Sprintf("# Curation set: %s (Terraform resource not yet implemented)\n\n", curSet.Name)
+		f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+			{Type: 4, Bytes: []byte(comment)},
+		})
+		_ = resourceName
 	}
 
 	return nil
