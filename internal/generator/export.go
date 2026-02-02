@@ -109,3 +109,87 @@ func (g *Generator) exportDocumentsToFile(ctx context.Context, collectionName st
 	fmt.Printf("  Exported %s: %d bytes\n", collectionName, written)
 	return nil
 }
+
+// exportSynonyms exports all synonyms for a collection to a JSON file
+func (g *Generator) exportSynonyms(ctx context.Context, collectionName string, dataDir string) error {
+	synonyms, err := g.serverClient.ListSynonyms(ctx, collectionName)
+	if err != nil {
+		return fmt.Errorf("failed to list synonyms: %w", err)
+	}
+
+	if len(synonyms) == 0 {
+		return nil
+	}
+
+	synonymsPath := filepath.Join(dataDir, collectionName+".synonyms.json")
+	synonymsFile, err := os.Create(synonymsPath)
+	if err != nil {
+		return fmt.Errorf("failed to create synonyms file: %w", err)
+	}
+	defer synonymsFile.Close()
+
+	encoder := json.NewEncoder(synonymsFile)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(synonyms); err != nil {
+		return fmt.Errorf("failed to write synonyms: %w", err)
+	}
+
+	fmt.Printf("  Exported %d synonyms for %s\n", len(synonyms), collectionName)
+	return nil
+}
+
+// exportOverrides exports all overrides for a collection to a JSON file
+func (g *Generator) exportOverrides(ctx context.Context, collectionName string, dataDir string) error {
+	overrides, err := g.serverClient.ListOverrides(ctx, collectionName)
+	if err != nil {
+		return fmt.Errorf("failed to list overrides: %w", err)
+	}
+
+	if len(overrides) == 0 {
+		return nil
+	}
+
+	overridesPath := filepath.Join(dataDir, collectionName+".overrides.json")
+	overridesFile, err := os.Create(overridesPath)
+	if err != nil {
+		return fmt.Errorf("failed to create overrides file: %w", err)
+	}
+	defer overridesFile.Close()
+
+	encoder := json.NewEncoder(overridesFile)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(overrides); err != nil {
+		return fmt.Errorf("failed to write overrides: %w", err)
+	}
+
+	fmt.Printf("  Exported %d overrides for %s\n", len(overrides), collectionName)
+	return nil
+}
+
+// exportStopwordsSets exports all stopwords sets to a JSON file
+func (g *Generator) exportStopwordsSets(ctx context.Context, dataDir string) error {
+	stopwordsSets, err := g.serverClient.ListStopwordsSets(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list stopwords sets: %w", err)
+	}
+
+	if len(stopwordsSets) == 0 {
+		return nil
+	}
+
+	stopwordsPath := filepath.Join(dataDir, "_stopwords.json")
+	stopwordsFile, err := os.Create(stopwordsPath)
+	if err != nil {
+		return fmt.Errorf("failed to create stopwords file: %w", err)
+	}
+	defer stopwordsFile.Close()
+
+	encoder := json.NewEncoder(stopwordsFile)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(stopwordsSets); err != nil {
+		return fmt.Errorf("failed to write stopwords: %w", err)
+	}
+
+	fmt.Printf("  Exported %d stopwords sets\n", len(stopwordsSets))
+	return nil
+}

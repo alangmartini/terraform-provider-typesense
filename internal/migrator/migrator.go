@@ -86,6 +86,31 @@ func (m *Migrator) Migrate(ctx context.Context) error {
 		} else {
 			fmt.Printf("  No documents file found, skipping data import\n")
 		}
+
+		// Import synonyms if file exists
+		synonymsFile := filepath.Join(dataDir, collectionName+".synonyms.json")
+		if _, err := os.Stat(synonymsFile); err == nil {
+			if err := m.importSynonyms(ctx, collectionName, synonymsFile); err != nil {
+				return fmt.Errorf("failed to import synonyms for %s: %w", collectionName, err)
+			}
+		}
+
+		// Import overrides if file exists
+		overridesFile := filepath.Join(dataDir, collectionName+".overrides.json")
+		if _, err := os.Stat(overridesFile); err == nil {
+			if err := m.importOverrides(ctx, collectionName, overridesFile); err != nil {
+				return fmt.Errorf("failed to import overrides for %s: %w", collectionName, err)
+			}
+		}
+	}
+
+	// Import global stopwords sets if file exists
+	stopwordsFile := filepath.Join(dataDir, "_stopwords.json")
+	if _, err := os.Stat(stopwordsFile); err == nil {
+		fmt.Println()
+		if err := m.importStopwordsSets(ctx, stopwordsFile); err != nil {
+			return fmt.Errorf("failed to import stopwords sets: %w", err)
+		}
 	}
 
 	return nil
@@ -228,4 +253,85 @@ func countLines(filename string) (int, error) {
 	}
 
 	return count, scanner.Err()
+}
+
+// importSynonyms imports synonyms for a collection from a JSON file
+func (m *Migrator) importSynonyms(ctx context.Context, collectionName string, synonymsFile string) error {
+	data, err := os.ReadFile(synonymsFile)
+	if err != nil {
+		return fmt.Errorf("failed to read synonyms file: %w", err)
+	}
+
+	var synonyms []client.Synonym
+	if err := json.Unmarshal(data, &synonyms); err != nil {
+		return fmt.Errorf("failed to parse synonyms: %w", err)
+	}
+
+	if len(synonyms) == 0 {
+		return nil
+	}
+
+	for _, syn := range synonyms {
+		_, err := m.targetClient.CreateSynonym(ctx, collectionName, &syn)
+		if err != nil {
+			return fmt.Errorf("failed to create synonym %s: %w", syn.ID, err)
+		}
+	}
+
+	fmt.Printf("  Imported %d synonyms\n", len(synonyms))
+	return nil
+}
+
+// importOverrides imports overrides for a collection from a JSON file
+func (m *Migrator) importOverrides(ctx context.Context, collectionName string, overridesFile string) error {
+	data, err := os.ReadFile(overridesFile)
+	if err != nil {
+		return fmt.Errorf("failed to read overrides file: %w", err)
+	}
+
+	var overrides []client.Override
+	if err := json.Unmarshal(data, &overrides); err != nil {
+		return fmt.Errorf("failed to parse overrides: %w", err)
+	}
+
+	if len(overrides) == 0 {
+		return nil
+	}
+
+	for _, ovr := range overrides {
+		_, err := m.targetClient.CreateOverride(ctx, collectionName, &ovr)
+		if err != nil {
+			return fmt.Errorf("failed to create override %s: %w", ovr.ID, err)
+		}
+	}
+
+	fmt.Printf("  Imported %d overrides\n", len(overrides))
+	return nil
+}
+
+// importStopwordsSets imports stopwords sets from a JSON file
+func (m *Migrator) importStopwordsSets(ctx context.Context, stopwordsFile string) error {
+	data, err := os.ReadFile(stopwordsFile)
+	if err != nil {
+		return fmt.Errorf("failed to read stopwords file: %w", err)
+	}
+
+	var stopwordsSets []client.StopwordsSet
+	if err := json.Unmarshal(data, &stopwordsSets); err != nil {
+		return fmt.Errorf("failed to parse stopwords: %w", err)
+	}
+
+	if len(stopwordsSets) == 0 {
+		return nil
+	}
+
+	for _, sw := range stopwordsSets {
+		_, err := m.targetClient.CreateStopwordsSet(ctx, &sw)
+		if err != nil {
+			return fmt.Errorf("failed to create stopwords set %s: %w", sw.ID, err)
+		}
+	}
+
+	fmt.Printf("Imported %d stopwords sets\n", len(stopwordsSets))
+	return nil
 }
