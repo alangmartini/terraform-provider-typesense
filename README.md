@@ -867,3 +867,17 @@ For issues and questions:
 ---
 
 **Happy Infrastructure-as-Coding!**
+
+# Testing end to end migration
+
+  Make Targets Workflow                                                                                                                                    
+                                                                                                                                                           
+  # Full E2E test (does everything below automatically)                                                                                                    
+  make testbed-e2e                                                                                                                                         
+                                                                                                                                                           
+  # Manual step-by-step:                                                                                                                                   
+  make testbed-up      # 1. Start Docker containers                                                                                                        
+  make testbed-seed    # 2. Populate source with data                                                                                                      
+  # ... run your migration ...                                                                                                                             
+  make testbed-verify  # 3. Compare source vs target                                                                                                       
+  make testbed-down    # 4. Clean up  
