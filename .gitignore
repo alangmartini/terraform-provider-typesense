@@ -35,3 +35,12 @@ target_cluster.txt
 # OS
 .DS_Store
 source_cluster.txt
+
+# Claude Code settings (local only)
+.claude/
+
+# Production backups (sensitive)
+prod-backup/
+
+# Test output files
+Terraform Test - *.txt
