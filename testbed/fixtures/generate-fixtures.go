@@ -143,6 +143,14 @@ func generateMarkdown(paragraphs int) string {
 	return sb.String()
 }
 
+// safePrefix returns the first n characters of s, or s if it's shorter than n
+func safePrefix(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
+
 func randomGeopoint() [2]float64 {
 	lat := -90.0 + rng.Float64()*180.0
 	lon := -180.0 + rng.Float64()*360.0
@@ -196,7 +204,7 @@ func generateProduct(id int) map[string]interface{} {
 		"reviews_count": rng.Intn(10000),
 		"in_stock":      rng.Float32() > 0.2,
 		"stock_quantity": rng.Intn(1000),
-		"sku":           fmt.Sprintf("SKU-%s-%06d", brands[rng.Intn(len(brands))][:3], id),
+		"sku":           fmt.Sprintf("SKU-%s-%06d", safePrefix(brands[rng.Intn(len(brands))], 3), id),
 		"created_at":    randomTimestamp(2020, 4),
 	}
 

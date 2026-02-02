@@ -157,13 +157,12 @@ run_generate() {
 run_migrate() {
     log "Running migrate command (import to target)..."
 
-    cd "$EXPORT_DIR"
-
     "$PROJECT_ROOT/terraform-provider-typesense" migrate \
-        --host "${TARGET_HOST}" \
-        --port "${TARGET_PORT}" \
-        --protocol "http" \
-        --api-key "${TARGET_API_KEY}"
+        --source-dir "$EXPORT_DIR/generated" \
+        --target-host "${TARGET_HOST}" \
+        --target-port "${TARGET_PORT}" \
+        --target-protocol "http" \
+        --target-api-key "${TARGET_API_KEY}"
 }
 
 verify_migration() {
@@ -178,33 +177,46 @@ verify_migration() {
 run_terraform_plan() {
     log "Running terraform plan (should show no changes)..."
 
-    cd "$EXPORT_DIR"
-
     # Check if terraform is available
     if ! command -v terraform &> /dev/null; then
         echo "Terraform not installed, skipping plan verification"
         return 0
     fi
 
-    # Initialize terraform
-    cat > provider.tf << EOF
-terraform {
-  required_providers {
-    typesense = {
-      source = "local/typesense/typesense"
-    }
-  }
-}
+    local generated_dir="$EXPORT_DIR/generated"
+    if [ ! -d "$generated_dir" ]; then
+        echo "Generated directory not found, skipping terraform plan"
+        return 0
+    fi
 
+    cd "$generated_dir"
+
+    # Set up dev override for local provider binary
+    local tf_cli_config
+    tf_cli_config=$(mktemp)
+    cat > "$tf_cli_config" << EOF
+provider_installation {
+  dev_overrides {
+    "alanm/typesense" = "${PROJECT_ROOT}"
+  }
+  direct {}
+}
+EOF
+    export TF_CLI_CONFIG_FILE="$tf_cli_config"
+
+    # Update the provider config for target cluster
+    cat > provider_override.tf << EOF
 provider "typesense" {
-  host     = "${TARGET_HOST}"
-  port     = ${TARGET_PORT}
-  protocol = "http"
-  api_key  = "${TARGET_API_KEY}"
+  server_host     = "${TARGET_HOST}"
+  server_port     = ${TARGET_PORT}
+  server_protocol = "http"
+  server_api_key  = "${TARGET_API_KEY}"
 }
 EOF
 
-    terraform init -input=false
+    # With dev_overrides, terraform init is not required and will warn
+    # Just run plan directly
+    echo "Using dev override for local provider binary"
 
     # Run plan and check for changes
     local plan_output
@@ -220,6 +232,7 @@ EOF
         fi
     }
 
+    rm -f "$tf_cli_config"
     echo "Terraform plan completed"
 }
 

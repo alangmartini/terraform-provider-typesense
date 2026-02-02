@@ -28,12 +28,12 @@ log() {
 
 error() {
     log "ERROR: $*" >&2
-    ((ERRORS++))
+    ((++ERRORS))
 }
 
 warn() {
     log "WARNING: $*" >&2
-    ((WARNINGS++))
+    ((++WARNINGS))
 }
 
 success() {
