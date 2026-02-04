@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
@@ -130,10 +131,9 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 							Default:     booldefault.StaticBool(true),
 						},
 						"sort": schema.BoolAttribute{
-							Description: "Enable sorting on this field.",
+							Description: "Enable sorting on this field. Typesense enables sorting by default for numeric fields (int32, int64, float).",
 							Optional:    true,
 							Computed:    true,
-							Default:     booldefault.StaticBool(false),
 						},
 						"infix": schema.BoolAttribute{
 							Description: "Enable infix search on this field.",
@@ -195,6 +195,23 @@ func (r *CollectionResource) Create(ctx context.Context, req resource.CreateRequ
 
 	created, err := r.client.CreateCollection(ctx, collection)
 	if err != nil {
+		// Check if the collection already exists (HTTP 409 Conflict)
+		// If so, adopt the existing collection into state instead of failing
+		if strings.Contains(err.Error(), "status 409") {
+			existing, getErr := r.client.GetCollection(ctx, data.Name.ValueString())
+			if getErr != nil {
+				resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Collection already exists but failed to read it: %s", getErr))
+				return
+			}
+			if existing == nil {
+				resp.Diagnostics.AddError("Client Error", "Collection reported as existing but could not be found")
+				return
+			}
+			// Adopt the existing collection into state
+			r.updateModelFromCollection(ctx, &data, existing)
+			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+			return
+		}
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create collection: %s", err))
 		return
 	}
@@ -399,7 +416,12 @@ func (r *CollectionResource) extractFields(ctx context.Context, data *Collection
 
 func (r *CollectionResource) updateModelFromCollection(ctx context.Context, data *CollectionResourceModel, collection *client.Collection) {
 	data.Name = types.StringValue(collection.Name)
-	data.DefaultSortingField = types.StringValue(collection.DefaultSortingField)
+	// Handle empty string as null for default_sorting_field
+	if collection.DefaultSortingField != "" {
+		data.DefaultSortingField = types.StringValue(collection.DefaultSortingField)
+	} else {
+		data.DefaultSortingField = types.StringNull()
+	}
 	data.EnableNestedFields = types.BoolValue(collection.EnableNestedFields)
 	data.NumDocuments = types.Int64Value(collection.NumDocuments)
 	data.CreatedAt = types.Int64Value(collection.CreatedAt)
@@ -434,8 +456,50 @@ func (r *CollectionResource) updateModelFromCollection(ctx context.Context, data
 		"locale":   types.StringType,
 	}
 
-	fieldValues := make([]attr.Value, len(collection.Fields))
-	for i, f := range collection.Fields {
+	// Check if the original model had an 'id' field that we need to preserve.
+	// Typesense treats 'id' as an implicit field and doesn't return it in the schema.
+	var idFieldValue attr.Value
+	if !data.Fields.IsNull() && !data.Fields.IsUnknown() {
+		var existingFields []CollectionFieldModel
+		data.Fields.ElementsAs(ctx, &existingFields, false)
+		for _, ef := range existingFields {
+			if ef.Name.ValueString() == "id" {
+				// Preserve the id field from the original plan/state
+				localeVal := types.StringNull()
+				if !ef.Locale.IsNull() && ef.Locale.ValueString() != "" {
+					localeVal = ef.Locale
+				}
+				idFieldValue, _ = types.ObjectValue(fieldAttrTypes, map[string]attr.Value{
+					"name":     ef.Name,
+					"type":     ef.Type,
+					"facet":    ef.Facet,
+					"optional": ef.Optional,
+					"index":    ef.Index,
+					"sort":     ef.Sort,
+					"infix":    ef.Infix,
+					"locale":   localeVal,
+				})
+				break
+			}
+		}
+	}
+
+	// Check if API response contains an 'id' field
+	apiHasIdField := false
+	for _, f := range collection.Fields {
+		if f.Name == "id" {
+			apiHasIdField = true
+			break
+		}
+	}
+
+	// Build field values, prepending 'id' if it was in original model but not in API response
+	fieldValues := make([]attr.Value, 0, len(collection.Fields)+1)
+	if idFieldValue != nil && !apiHasIdField {
+		fieldValues = append(fieldValues, idFieldValue)
+	}
+
+	for _, f := range collection.Fields {
 		indexVal := types.BoolValue(true)
 		if f.Index != nil {
 			indexVal = types.BoolValue(*f.Index)
@@ -456,7 +520,7 @@ func (r *CollectionResource) updateModelFromCollection(ctx context.Context, data
 			"infix":    types.BoolValue(f.Infix),
 			"locale":   localeVal,
 		})
-		fieldValues[i] = fieldObj
+		fieldValues = append(fieldValues, fieldObj)
 	}
 
 	fieldObjType := types.ObjectType{AttrTypes: fieldAttrTypes}
