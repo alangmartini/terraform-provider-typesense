@@ -708,6 +708,97 @@ func (c *ServerClient) ListSynonymSets(ctx context.Context) ([]SynonymSet, error
 	return result, nil
 }
 
+// GetSynonymSet retrieves a synonym set by name (Typesense v30.0+)
+func (c *ServerClient) GetSynonymSet(ctx context.Context, name string) (*SynonymSet, error) {
+	url := fmt.Sprintf("%s/synonym_sets/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get synonym set: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get synonym set: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result SynonymSet
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpsertSynonymSet creates or updates a synonym set (Typesense v30.0+)
+func (c *ServerClient) UpsertSynonymSet(ctx context.Context, synonymSet *SynonymSet) (*SynonymSet, error) {
+	body, err := json.Marshal(synonymSet)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal synonym set: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/synonym_sets/%s", c.baseURL, synonymSet.Name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upsert synonym set: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to upsert synonym set: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result SynonymSet
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteSynonymSet deletes a synonym set by name (Typesense v30.0+)
+func (c *ServerClient) DeleteSynonymSet(ctx context.Context, name string) error {
+	url := fmt.Sprintf("%s/synonym_sets/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete synonym set: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete synonym set: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
 // ListCurationSets retrieves all curation sets (Typesense v30.0+)
 func (c *ServerClient) ListCurationSets(ctx context.Context) ([]CurationSet, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/curation_sets", nil)
@@ -739,6 +830,97 @@ func (c *ServerClient) ListCurationSets(ctx context.Context) ([]CurationSet, err
 	}
 
 	return result, nil
+}
+
+// GetCurationSet retrieves a curation set by name (Typesense v30.0+)
+func (c *ServerClient) GetCurationSet(ctx context.Context, name string) (*CurationSet, error) {
+	url := fmt.Sprintf("%s/curation_sets/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get curation set: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get curation set: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result CurationSet
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpsertCurationSet creates or updates a curation set (Typesense v30.0+)
+func (c *ServerClient) UpsertCurationSet(ctx context.Context, curationSet *CurationSet) (*CurationSet, error) {
+	body, err := json.Marshal(curationSet)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal curation set: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/curation_sets/%s", c.baseURL, curationSet.Name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upsert curation set: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to upsert curation set: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result CurationSet
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteCurationSet deletes a curation set by name (Typesense v30.0+)
+func (c *ServerClient) DeleteCurationSet(ctx context.Context, name string) error {
+	url := fmt.Sprintf("%s/curation_sets/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete curation set: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete curation set: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
 }
 
 // ListCollections retrieves all collections
