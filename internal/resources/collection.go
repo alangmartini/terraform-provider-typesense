@@ -395,13 +395,19 @@ func (r *CollectionResource) extractFields(ctx context.Context, data *Collection
 			Type:     fm.Type.ValueString(),
 			Facet:    fm.Facet.ValueBool(),
 			Optional: fm.Optional.ValueBool(),
-			Sort:     fm.Sort.ValueBool(),
 			Infix:    fm.Infix.ValueBool(),
 		}
 
 		if !fm.Index.IsNull() {
 			index := fm.Index.ValueBool()
 			field.Index = &index
+		}
+
+		// Only set Sort if explicitly configured (not null or unknown)
+		// This allows Typesense to apply its server-side defaults for numeric types
+		if !fm.Sort.IsNull() && !fm.Sort.IsUnknown() {
+			sort := fm.Sort.ValueBool()
+			field.Sort = &sort
 		}
 
 		if !fm.Locale.IsNull() {
@@ -465,18 +471,43 @@ func (r *CollectionResource) updateModelFromCollection(ctx context.Context, data
 		for _, ef := range existingFields {
 			if ef.Name.ValueString() == "id" {
 				// Preserve the id field from the original plan/state
+				// But ensure all computed values are resolved (not unknown)
 				localeVal := types.StringNull()
 				if !ef.Locale.IsNull() && ef.Locale.ValueString() != "" {
 					localeVal = ef.Locale
 				}
+
+				// Resolve computed values to their defaults if unknown/null
+				facetVal := ef.Facet
+				if facetVal.IsNull() || facetVal.IsUnknown() {
+					facetVal = types.BoolValue(false)
+				}
+				optionalVal := ef.Optional
+				if optionalVal.IsNull() || optionalVal.IsUnknown() {
+					optionalVal = types.BoolValue(false)
+				}
+				indexVal := ef.Index
+				if indexVal.IsNull() || indexVal.IsUnknown() {
+					indexVal = types.BoolValue(true)
+				}
+				// For 'id' field (string type), sort defaults to false
+				sortVal := ef.Sort
+				if sortVal.IsNull() || sortVal.IsUnknown() {
+					sortVal = types.BoolValue(false)
+				}
+				infixVal := ef.Infix
+				if infixVal.IsNull() || infixVal.IsUnknown() {
+					infixVal = types.BoolValue(false)
+				}
+
 				idFieldValue, _ = types.ObjectValue(fieldAttrTypes, map[string]attr.Value{
 					"name":     ef.Name,
 					"type":     ef.Type,
-					"facet":    ef.Facet,
-					"optional": ef.Optional,
-					"index":    ef.Index,
-					"sort":     ef.Sort,
-					"infix":    ef.Infix,
+					"facet":    facetVal,
+					"optional": optionalVal,
+					"index":    indexVal,
+					"sort":     sortVal,
+					"infix":    infixVal,
 					"locale":   localeVal,
 				})
 				break
@@ -505,6 +536,12 @@ func (r *CollectionResource) updateModelFromCollection(ctx context.Context, data
 			indexVal = types.BoolValue(*f.Index)
 		}
 
+		// Handle Sort pointer - if nil, use false as the default display value
+		sortVal := types.BoolValue(false)
+		if f.Sort != nil {
+			sortVal = types.BoolValue(*f.Sort)
+		}
+
 		localeVal := types.StringNull()
 		if f.Locale != "" {
 			localeVal = types.StringValue(f.Locale)
@@ -516,7 +553,7 @@ func (r *CollectionResource) updateModelFromCollection(ctx context.Context, data
 			"facet":    types.BoolValue(f.Facet),
 			"optional": types.BoolValue(f.Optional),
 			"index":    indexVal,
-			"sort":     types.BoolValue(f.Sort),
+			"sort":     sortVal,
 			"infix":    types.BoolValue(f.Infix),
 			"locale":   localeVal,
 		})

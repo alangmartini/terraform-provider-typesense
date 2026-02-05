@@ -90,7 +90,7 @@ type CollectionField struct {
 	Facet    bool   `json:"facet,omitempty"`
 	Optional bool   `json:"optional,omitempty"`
 	Index    *bool  `json:"index,omitempty"`
-	Sort     bool   `json:"sort,omitempty"`
+	Sort     *bool  `json:"sort,omitempty"`
 	Infix    bool   `json:"infix,omitempty"`
 	Locale   string `json:"locale,omitempty"`
 	Drop     bool   `json:"drop,omitempty"`

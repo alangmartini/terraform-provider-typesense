@@ -80,7 +80,7 @@ func generateCollectionBlock(c *client.Collection, resourceName string) *hclwrit
 		if field.Index != nil && !*field.Index {
 			fieldBody.SetAttributeValue("index", cty.BoolVal(false))
 		}
-		if field.Sort {
+		if field.Sort != nil && *field.Sort {
 			fieldBody.SetAttributeValue("sort", cty.BoolVal(true))
 		}
 		if field.Infix {
