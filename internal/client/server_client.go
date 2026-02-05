@@ -26,7 +26,7 @@ type ServerInfo struct {
 // SynonymSet represents a Typesense synonym set (v30.0+)
 type SynonymSet struct {
 	Name     string        `json:"name"`
-	Synonyms []SynonymItem `json:"synonyms,omitempty"`
+	Synonyms []SynonymItem `json:"items,omitempty"` // API expects "items" field containing array of synonym rules
 }
 
 // SynonymItem represents a synonym item within a synonym set (v30.0+)
