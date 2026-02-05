@@ -19,6 +19,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   PRODUCTS_COUNT=100 USERS_COUNT=100 ARTICLES_COUNT=100 EVENTS_COUNT=100 EDGE_CASES_COUNT=50 make testbed-seed
   ```
 
+## Consistency Tests
+
+The provider includes a suite of tests to catch "inconsistent result after apply" errors caused by server-side default mismatches. These tests verify that computed attributes properly accept Typesense's server-side defaults.
+
+**Run consistency tests:**
+```bash
+make testbed-up        # Start testbed first
+make test-consistency  # Run consistency test suite
+```
+
+**When to add new consistency tests:**
+- When adding new field attributes that have server-side defaults
+- When modifying how computed values are handled
+- When Typesense's API behavior changes
+
+**Key principle:** Test with minimal configurations (only required fields) to expose any mismatch between what Terraform plans and what the API returns.
+
 ## E2E Testbed
 
 The `testbed/` directory contains infrastructure for full end-to-end testing:
