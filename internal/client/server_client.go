@@ -1208,6 +1208,143 @@ func (c *ServerClient) DeleteNLSearchModel(ctx context.Context, id string) error
 	return nil
 }
 
+// ConversationModel represents a Typesense Conversation Model (RAG) configuration
+type ConversationModel struct {
+	ID                string `json:"id,omitempty"`
+	ModelName         string `json:"model_name"`
+	APIKey            string `json:"api_key,omitempty"`
+	HistoryCollection string `json:"history_collection"`
+	SystemPrompt      string `json:"system_prompt"`
+	TTL               int64  `json:"ttl,omitempty"`
+	MaxBytes          int64  `json:"max_bytes,omitempty"`
+	AccountID         string `json:"account_id,omitempty"` // Cloudflare Workers AI
+	VllmURL           string `json:"vllm_url,omitempty"`   // vLLM self-hosted
+}
+
+// CreateConversationModel creates a new Conversation Model
+func (c *ServerClient) CreateConversationModel(ctx context.Context, model *ConversationModel) (*ConversationModel, error) {
+	body, err := json.Marshal(model)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal conversation model: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/conversations/models", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create conversation model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to create conversation model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result ConversationModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetConversationModel retrieves a Conversation Model by ID
+func (c *ServerClient) GetConversationModel(ctx context.Context, id string) (*ConversationModel, error) {
+	url := fmt.Sprintf("%s/conversations/models/%s", c.baseURL, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get conversation model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result ConversationModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateConversationModel updates an existing Conversation Model
+func (c *ServerClient) UpdateConversationModel(ctx context.Context, model *ConversationModel) (*ConversationModel, error) {
+	body, err := json.Marshal(model)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal conversation model: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/conversations/models/%s", c.baseURL, model.ID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update conversation model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to update conversation model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result ConversationModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteConversationModel deletes a Conversation Model
+func (c *ServerClient) DeleteConversationModel(ctx context.Context, id string) error {
+	url := fmt.Sprintf("%s/conversations/models/%s", c.baseURL, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete conversation model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete conversation model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
 // ListAPIKeys retrieves all API keys
 func (c *ServerClient) ListAPIKeys(ctx context.Context) ([]APIKey, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/keys", nil)
