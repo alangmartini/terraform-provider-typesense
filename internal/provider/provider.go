@@ -127,6 +127,7 @@ func (p *TypesenseProvider) Resources(ctx context.Context) []func() resource.Res
 		resources.NewClusterResource,
 		resources.NewClusterConfigChangeResource,
 		resources.NewCollectionResource,
+		resources.NewCollectionAliasResource,
 		resources.NewSynonymResource,
 		resources.NewOverrideResource,
 		resources.NewStopwordsSetResource,

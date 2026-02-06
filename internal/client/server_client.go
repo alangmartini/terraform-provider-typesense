@@ -155,6 +155,12 @@ type APIKey struct {
 	ExpiresAt   int64    `json:"expires_at,omitempty"`
 }
 
+// CollectionAlias represents a Typesense collection alias
+type CollectionAlias struct {
+	Name           string `json:"name"`
+	CollectionName string `json:"collection_name"`
+}
+
 // CreateCollection creates a new collection
 func (c *ServerClient) CreateCollection(ctx context.Context, collection *Collection) (*Collection, error) {
 	body, err := json.Marshal(collection)
@@ -550,6 +556,131 @@ func (c *ServerClient) DeleteStopwordsSet(ctx context.Context, id string) error 
 	}
 
 	return nil
+}
+
+// UpsertCollectionAlias creates or updates a collection alias
+func (c *ServerClient) UpsertCollectionAlias(ctx context.Context, alias *CollectionAlias) (*CollectionAlias, error) {
+	url := fmt.Sprintf("%s/aliases/%s", c.baseURL, alias.Name)
+
+	// Only send collection_name in the body
+	body, err := json.Marshal(map[string]string{
+		"collection_name": alias.CollectionName,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal alias: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upsert alias: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to upsert alias: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result CollectionAlias
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetCollectionAlias retrieves a collection alias by name
+func (c *ServerClient) GetCollectionAlias(ctx context.Context, name string) (*CollectionAlias, error) {
+	url := fmt.Sprintf("%s/aliases/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get alias: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get alias: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result CollectionAlias
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteCollectionAlias deletes a collection alias
+func (c *ServerClient) DeleteCollectionAlias(ctx context.Context, name string) error {
+	url := fmt.Sprintf("%s/aliases/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete alias: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete alias: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// ListCollectionAliases retrieves all collection aliases
+func (c *ServerClient) ListCollectionAliases(ctx context.Context) ([]CollectionAlias, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/aliases", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list aliases: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list aliases: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var wrapper struct {
+		Aliases []CollectionAlias `json:"aliases"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return wrapper.Aliases, nil
 }
 
 // CreateAPIKey creates a new API key
