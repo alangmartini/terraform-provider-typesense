@@ -1,7 +1,6 @@
 package resources_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/alanm/terraform-provider-typesense/internal/provider"
@@ -68,22 +67,22 @@ func TestAccAPIKeyResource_full(t *testing.T) {
 	})
 }
 
-func testAccAPIKeyResourceConfig_basic(name string) string {
-	return fmt.Sprintf(`
+func testAccAPIKeyResourceConfig_basic(_ string) string {
+	return `
 resource "typesense_api_key" "test" {
   actions     = ["documents:search"]
   collections = ["*"]
 }
-`)
+`
 }
 
-func testAccAPIKeyResourceConfig_full(name string) string {
-	return fmt.Sprintf(`
+func testAccAPIKeyResourceConfig_full(_ string) string {
+	return `
 resource "typesense_api_key" "test" {
   description = "Test API key"
   actions     = ["documents:search", "documents:get"]
   collections = ["*"]
   expires_at  = 9999999999
 }
-`)
+`
 }

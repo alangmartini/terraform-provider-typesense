@@ -599,8 +599,8 @@ func TestUpsertSynonymSetHTTPPayload(t *testing.T) {
 
 		// Return a successful response
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"name": "test-set",
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"name":  "test-set",
 			"items": []interface{}{},
 		})
 	}))
@@ -658,7 +658,7 @@ func TestUpsertCurationSetHTTPPayload(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"name":       "test-curation",
 			"curations": []interface{}{},
 		})
@@ -719,7 +719,7 @@ func TestCreateCollectionHTTPPayload(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(receivedPayload)
+		_ = json.NewEncoder(w).Encode(receivedPayload)
 	}))
 	defer server.Close()
 
@@ -777,7 +777,7 @@ func TestCreateSynonymHTTPPayload(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(receivedPayload)
+		_ = json.NewEncoder(w).Encode(receivedPayload)
 	}))
 	defer server.Close()
 
@@ -824,7 +824,7 @@ func TestCreateOverrideHTTPPayload(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(receivedPayload)
+		_ = json.NewEncoder(w).Encode(receivedPayload)
 	}))
 	defer server.Close()
 
@@ -883,7 +883,7 @@ func TestCreateStopwordsSetHTTPPayload(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(receivedPayload)
+		_ = json.NewEncoder(w).Encode(receivedPayload)
 	}))
 	defer server.Close()
 
@@ -944,7 +944,7 @@ func TestCreateAPIKeyHTTPPayload(t *testing.T) {
 			"actions":     receivedPayload["actions"],
 			"collections": receivedPayload["collections"],
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
