@@ -258,3 +258,29 @@ output "analytics_collections" {
     nohits_queries = typesense_collection.nohits_queries.name
   }
 }
+
+# =============================================================================
+# CURATIONS (OVERRIDES)
+# =============================================================================
+
+output "curations" {
+  description = "Configured curations for search result customization"
+  value = {
+    featured = {
+      best_of_tracks = typesense_override.best_of_tracks.name
+      new_releases   = typesense_override.new_releases.name
+    }
+    query_corrections = {
+      acdc_redirect  = typesense_override.acdc_redirect.name
+      beatles_boost  = typesense_override.beatles_search.name
+    }
+    genre_curations = {
+      rock = typesense_override.rock_enhanced.name
+      jazz = typesense_override.jazz_discovery.name
+    }
+    tag_based = {
+      mobile  = typesense_override.mobile_search.name
+      premium = typesense_override.premium_search.name
+    }
+  }
+}
