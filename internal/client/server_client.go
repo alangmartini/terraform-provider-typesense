@@ -1062,6 +1062,152 @@ func (c *ServerClient) ListStopwordsSets(ctx context.Context) ([]StopwordsSet, e
 	return wrapper.Stopwords, nil
 }
 
+// NLSearchModel represents a Typesense Natural Language Search Model configuration
+type NLSearchModel struct {
+	ID            string   `json:"id"`
+	ModelName     string   `json:"model_name"`
+	APIKey        string   `json:"api_key,omitempty"`
+	SystemPrompt  string   `json:"system_prompt,omitempty"`
+	MaxBytes      int64    `json:"max_bytes,omitempty"`
+	Temperature   *float64 `json:"temperature,omitempty"`
+	TopP          *float64 `json:"top_p,omitempty"`
+	TopK          *int64   `json:"top_k,omitempty"`
+	AccountID     string   `json:"account_id,omitempty"`     // Cloudflare Workers AI
+	APIURL        string   `json:"api_url,omitempty"`        // vLLM self-hosted
+	ProjectID     string   `json:"project_id,omitempty"`     // GCP Vertex AI
+	AccessToken   string   `json:"access_token,omitempty"`   // GCP Vertex AI
+	RefreshToken  string   `json:"refresh_token,omitempty"`  // GCP Vertex AI
+	ClientID      string   `json:"client_id,omitempty"`      // GCP Vertex AI
+	ClientSecret  string   `json:"client_secret,omitempty"`  // GCP Vertex AI
+	Region        string   `json:"region,omitempty"`         // GCP region
+	StopSequences []string `json:"stop_sequences,omitempty"` // Google models
+	APIVersion    string   `json:"api_version,omitempty"`    // Google API version
+}
+
+// CreateNLSearchModel creates a new Natural Language Search Model
+func (c *ServerClient) CreateNLSearchModel(ctx context.Context, model *NLSearchModel) (*NLSearchModel, error) {
+	body, err := json.Marshal(model)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal NL search model: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/nl_search_models", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create NL search model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to create NL search model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result NLSearchModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetNLSearchModel retrieves a Natural Language Search Model by ID
+func (c *ServerClient) GetNLSearchModel(ctx context.Context, id string) (*NLSearchModel, error) {
+	url := fmt.Sprintf("%s/nl_search_models/%s", c.baseURL, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NL search model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get NL search model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result NLSearchModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateNLSearchModel updates an existing Natural Language Search Model
+func (c *ServerClient) UpdateNLSearchModel(ctx context.Context, model *NLSearchModel) (*NLSearchModel, error) {
+	body, err := json.Marshal(model)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal NL search model: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/nl_search_models/%s", c.baseURL, model.ID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update NL search model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to update NL search model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result NLSearchModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteNLSearchModel deletes a Natural Language Search Model
+func (c *ServerClient) DeleteNLSearchModel(ctx context.Context, id string) error {
+	url := fmt.Sprintf("%s/nl_search_models/%s", c.baseURL, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete NL search model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete NL search model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
 // ListAPIKeys retrieves all API keys
 func (c *ServerClient) ListAPIKeys(ctx context.Context) ([]APIKey, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/keys", nil)
