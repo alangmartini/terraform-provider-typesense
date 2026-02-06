@@ -1104,6 +1104,11 @@ func (c *ServerClient) CreateNLSearchModel(ctx context.Context, model *NLSearchM
 	}
 	defer resp.Body.Close()
 
+	// Handle 409 Conflict - model already exists, update it instead
+	if resp.StatusCode == http.StatusConflict {
+		return c.UpdateNLSearchModel(ctx, model)
+	}
+
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("failed to create NL search model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
@@ -1240,6 +1245,11 @@ func (c *ServerClient) CreateConversationModel(ctx context.Context, model *Conve
 		return nil, fmt.Errorf("failed to create conversation model: %w", err)
 	}
 	defer resp.Body.Close()
+
+	// Handle 409 Conflict - model already exists, update it instead
+	if resp.StatusCode == http.StatusConflict {
+		return c.UpdateConversationModel(ctx, model)
+	}
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
