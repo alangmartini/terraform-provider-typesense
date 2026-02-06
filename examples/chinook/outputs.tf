@@ -136,3 +136,28 @@ output "nl_search_enabled" {
   description = "Whether Natural Language Search is enabled"
   value       = length(typesense_nl_search_model.music_search) > 0
 }
+
+# =============================================================================
+# STOPWORDS SETS
+# =============================================================================
+
+output "stopwords_sets" {
+  description = "Configured stopwords sets for the Chinook database"
+  value = {
+    english_common = {
+      name   = typesense_stopwords_set.english_common.name
+      locale = typesense_stopwords_set.english_common.locale
+      count  = length(typesense_stopwords_set.english_common.stopwords)
+    }
+    music_terms = {
+      name   = typesense_stopwords_set.music_terms.name
+      locale = typesense_stopwords_set.music_terms.locale
+      count  = length(typesense_stopwords_set.music_terms.stopwords)
+    }
+    billing_terms = {
+      name   = typesense_stopwords_set.billing_terms.name
+      locale = typesense_stopwords_set.billing_terms.locale
+      count  = length(typesense_stopwords_set.billing_terms.stopwords)
+    }
+  }
+}
