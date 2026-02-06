@@ -118,6 +118,7 @@ func TestAccOverrideResource_replaceQuery(t *testing.T) {
 					resource.TestCheckResourceAttr("typesense_override.test", "rule.query", "iphone"),
 					resource.TestCheckResourceAttr("typesense_override.test", "rule.match", "exact"),
 					resource.TestCheckResourceAttr("typesense_override.test", "replace_query", "apple iphone smartphone"),
+					resource.TestCheckResourceAttr("typesense_override.test", "remove_matched_tokens", "false"),
 					resource.TestCheckResourceAttrSet("typesense_override.test", "id"),
 				),
 			},
@@ -265,7 +266,8 @@ resource "typesense_override" "test" {
     match = "exact"
   }
 
-  replace_query = "apple iphone smartphone"
+  replace_query         = "apple iphone smartphone"
+  remove_matched_tokens = false
 }
 `, collectionName, overrideName)
 }
