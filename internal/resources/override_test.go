@@ -151,7 +151,7 @@ resource "typesense_override" "test" {
   collection = typesense_collection.test.name
   name       = %[2]q
 
-  rule {
+  rule = {
     query = "apple"
     match = "exact"
   }
@@ -189,7 +189,7 @@ resource "typesense_override" "test" {
   collection = typesense_collection.test.name
   name       = %[2]q
 
-  rule {
+  rule = {
     query = "phone"
     match = "contains"
   }
@@ -230,7 +230,7 @@ resource "typesense_override" "test" {
   collection = typesense_collection.test.name
   name       = %[2]q
 
-  rule {
+  rule = {
     query = "laptop"
     match = "exact"
   }
@@ -260,7 +260,7 @@ resource "typesense_override" "test" {
   collection = typesense_collection.test.name
   name       = %[2]q
 
-  rule {
+  rule = {
     query = "iphone"
     match = "exact"
   }

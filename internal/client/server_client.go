@@ -73,7 +73,7 @@ func NewServerClient(host, apiKey string, port int, protocol string) *ServerClie
 
 // Collection represents a Typesense collection
 type Collection struct {
-	Name                string            `json:"name"`
+	Name                string            `json:"name,omitempty"`
 	Fields              []CollectionField `json:"fields"`
 	DefaultSortingField string            `json:"default_sorting_field,omitempty"`
 	TokenSeparators     []string          `json:"token_separators,omitempty"`

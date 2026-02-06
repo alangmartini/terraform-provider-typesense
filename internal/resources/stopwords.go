@@ -31,7 +31,7 @@ type StopwordsSetResource struct {
 type StopwordsSetResourceModel struct {
 	ID        types.String `tfsdk:"id"`
 	Name      types.String `tfsdk:"name"`
-	Stopwords types.List   `tfsdk:"stopwords"`
+	Stopwords types.Set    `tfsdk:"stopwords"`
 	Locale    types.String `tfsdk:"locale"`
 }
 
@@ -57,8 +57,8 @@ func (r *StopwordsSetResource) Schema(ctx context.Context, req resource.SchemaRe
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"stopwords": schema.ListAttribute{
-				Description: "List of stopwords.",
+			"stopwords": schema.SetAttribute{
+				Description: "Set of stopwords.",
 				Required:    true,
 				ElementType: types.StringType,
 			},
@@ -151,12 +151,12 @@ func (r *StopwordsSetResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
-	// Update stopwords list
+	// Update stopwords set
 	stopwordValues := make([]types.String, len(stopwordsSet.Stopwords))
 	for i, s := range stopwordsSet.Stopwords {
 		stopwordValues[i] = types.StringValue(s)
 	}
-	data.Stopwords, _ = types.ListValueFrom(ctx, types.StringType, stopwordValues)
+	data.Stopwords, _ = types.SetValueFrom(ctx, types.StringType, stopwordValues)
 
 	if stopwordsSet.Locale != "" {
 		data.Locale = types.StringValue(stopwordsSet.Locale)

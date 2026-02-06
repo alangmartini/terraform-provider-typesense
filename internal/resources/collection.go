@@ -33,6 +33,7 @@ type CollectionResource struct {
 
 // CollectionResourceModel describes the resource data model.
 type CollectionResourceModel struct {
+	ID                  types.String `tfsdk:"id"`
 	Name                types.String `tfsdk:"name"`
 	Fields              types.List   `tfsdk:"field"`
 	DefaultSortingField types.String `tfsdk:"default_sorting_field"`
@@ -63,6 +64,13 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 	resp.Schema = schema.Schema{
 		Description: "Manages a Typesense collection.",
 		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Description: "Unique identifier for the collection (same as name).",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
 			"name": schema.StringAttribute{
 				Description: "The name of the collection.",
 				Required:    true,
@@ -341,7 +349,8 @@ func (r *CollectionResource) Delete(ctx context.Context, req resource.DeleteRequ
 }
 
 func (r *CollectionResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), req.ID)...)
 }
 
 func (r *CollectionResource) modelToCollection(ctx context.Context, data *CollectionResourceModel) (*client.Collection, diag.Diagnostics) {
@@ -421,6 +430,7 @@ func (r *CollectionResource) extractFields(ctx context.Context, data *Collection
 }
 
 func (r *CollectionResource) updateModelFromCollection(ctx context.Context, data *CollectionResourceModel, collection *client.Collection) {
+	data.ID = types.StringValue(collection.Name)
 	data.Name = types.StringValue(collection.Name)
 	// Handle empty string as null for default_sorting_field
 	if collection.DefaultSortingField != "" {
