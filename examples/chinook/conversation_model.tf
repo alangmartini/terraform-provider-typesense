@@ -16,6 +16,12 @@ resource "typesense_collection" "conversation_history" {
     type = "string"
   }
 
+  # Model ID - required by Typesense for conversation history
+  field {
+    name = "model_id"
+    type = "string"
+  }
+
   # Role of the message sender (user or assistant)
   field {
     name = "role"
@@ -29,9 +35,10 @@ resource "typesense_collection" "conversation_history" {
   }
 
   # Timestamp for ordering and TTL management
+  # NOTE: Must be int32, not int64 - Typesense requires specifically int32
   field {
     name = "timestamp"
-    type = "int64"
+    type = "int32"
     sort = true
   }
 }
