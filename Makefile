@@ -1,8 +1,9 @@
-.PHONY: test test-acc test-consistency start-typesense stop-typesense build clean \
+.PHONY: test test-acc test-acc-ci test-consistency test-conversation-model \
+	start-typesense stop-typesense build clean \
 	testbed-up testbed-down testbed-seed testbed-e2e testbed-verify testbed-clean
 
 # Configuration
-TYPESENSE_API_KEY := test-api-key-for-acceptance-tests
+TYPESENSE_API_KEY ?= test-api-key-for-acceptance-tests
 PORT := 8108
 CONTAINER_NAME := typesense-test
 TYPESENSE_HOST := localhost
@@ -71,6 +72,37 @@ test-acc:
 	@$(MAKE) stop-typesense
 	@echo ""
 	@echo "✓ Acceptance tests complete!"
+
+# Run all acceptance tests (CI-friendly, assumes Typesense is already running)
+# Used in GitHub Actions with Typesense service container
+test-acc-ci:
+	@echo "Running all acceptance tests..."
+	@export TYPESENSE_HOST=$${TYPESENSE_HOST:-localhost} && \
+	export TYPESENSE_PORT=$${TYPESENSE_PORT:-8108} && \
+	export TYPESENSE_PROTOCOL=$${TYPESENSE_PROTOCOL:-http} && \
+	export TYPESENSE_API_KEY=$${TYPESENSE_API_KEY:-test-api-key-for-acceptance-tests} && \
+	export TF_ACC=1 && \
+	go test -v -timeout 30m ./internal/resources/...
+	@echo ""
+	@echo "✓ All acceptance tests complete!"
+
+# Run conversation model validation tests
+# These tests verify Typesense properly validates history collection schema
+test-conversation-model:
+	@echo "Running conversation model validation tests..."
+	@if ! curl -sf http://localhost:8108/health > /dev/null 2>&1; then \
+		echo "Error: Testbed not running. Run 'make testbed-up' first."; \
+		exit 1; \
+	fi
+	@echo ""
+	@export TYPESENSE_HOST=localhost && \
+	export TYPESENSE_PORT=8108 && \
+	export TYPESENSE_PROTOCOL=http && \
+	export TYPESENSE_API_KEY=source-test-api-key && \
+	export TF_ACC=1 && \
+	go test -v -run "TestAccConversationModelResource" ./internal/resources
+	@echo ""
+	@echo "✓ Conversation model tests complete!"
 
 # Run consistency tests against the testbed
 # These tests catch "inconsistent result after apply" errors from server-side default mismatches

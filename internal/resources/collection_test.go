@@ -30,9 +30,10 @@ func TestAccCollectionResource_basic(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:      "typesense_collection.test",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "typesense_collection.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"field"}, // Typesense treats 'id' as implicit and doesn't return it in schema
 			},
 		},
 	})
@@ -66,9 +67,10 @@ func TestAccCollectionResource_full(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:      "typesense_collection.test",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "typesense_collection.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"field"}, // Typesense treats 'id' as implicit and doesn't return it in schema
 			},
 		},
 	})

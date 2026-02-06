@@ -73,3 +73,51 @@ jobs:
         uses: golangci/golangci-lint-action@v4
         with:
           version: latest
+
+  acceptance:
+    name: Acceptance Tests
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      typesense:
+        image: typesense/typesense:29.0.rc30
+        ports:
+          - 8108:8108
+        options: --tmpfs /data:rw
+        env:
+          TYPESENSE_DATA_DIR: /data
+          TYPESENSE_API_KEY: test-api-key
+          TYPESENSE_ENABLE_CORS: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Wait for Typesense
+        run: |
+          echo "Waiting for Typesense to be ready..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:8108/health -H "X-TYPESENSE-API-KEY: test-api-key" > /dev/null; then
+              echo "Typesense is ready!"
+              exit 0
+            fi
+            echo "Attempt $i: Still waiting..."
+            sleep 2
+          done
+          echo "Typesense failed to start"
+          exit 1
+
+      - name: Run acceptance tests
+        env:
+          TF_ACC: "1"
+          TYPESENSE_HOST: localhost
+          TYPESENSE_PORT: "8108"
+          TYPESENSE_PROTOCOL: http
+          TYPESENSE_API_KEY: test-api-key
+        run: make test-acc-ci

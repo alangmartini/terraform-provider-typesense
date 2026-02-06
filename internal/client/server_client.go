@@ -73,7 +73,7 @@ func NewServerClient(host, apiKey string, port int, protocol string) *ServerClie
 
 // Collection represents a Typesense collection
 type Collection struct {
-	Name                string            `json:"name"`
+	Name                string            `json:"name,omitempty"`
 	Fields              []CollectionField `json:"fields"`
 	DefaultSortingField string            `json:"default_sorting_field,omitempty"`
 	TokenSeparators     []string          `json:"token_separators,omitempty"`
@@ -153,6 +153,26 @@ type APIKey struct {
 	Actions     []string `json:"actions"`
 	Collections []string `json:"collections"`
 	ExpiresAt   int64    `json:"expires_at,omitempty"`
+}
+
+// CollectionAlias represents a Typesense collection alias
+type CollectionAlias struct {
+	Name           string `json:"name"`
+	CollectionName string `json:"collection_name"`
+}
+
+// Preset represents a Typesense search preset
+type Preset struct {
+	Name  string         `json:"name,omitempty"`
+	Value map[string]any `json:"value"`
+}
+
+// AnalyticsRule represents a Typesense analytics rule
+type AnalyticsRule struct {
+	Name      string         `json:"name,omitempty"`
+	Type      string         `json:"type"`
+	EventType string         `json:"event_type"`
+	Params    map[string]any `json:"params"`
 }
 
 // CreateCollection creates a new collection
@@ -550,6 +570,383 @@ func (c *ServerClient) DeleteStopwordsSet(ctx context.Context, id string) error 
 	}
 
 	return nil
+}
+
+// UpsertCollectionAlias creates or updates a collection alias
+func (c *ServerClient) UpsertCollectionAlias(ctx context.Context, alias *CollectionAlias) (*CollectionAlias, error) {
+	url := fmt.Sprintf("%s/aliases/%s", c.baseURL, alias.Name)
+
+	// Only send collection_name in the body
+	body, err := json.Marshal(map[string]string{
+		"collection_name": alias.CollectionName,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal alias: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upsert alias: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to upsert alias: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result CollectionAlias
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetCollectionAlias retrieves a collection alias by name
+func (c *ServerClient) GetCollectionAlias(ctx context.Context, name string) (*CollectionAlias, error) {
+	url := fmt.Sprintf("%s/aliases/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get alias: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get alias: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result CollectionAlias
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteCollectionAlias deletes a collection alias
+func (c *ServerClient) DeleteCollectionAlias(ctx context.Context, name string) error {
+	url := fmt.Sprintf("%s/aliases/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete alias: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete alias: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// ListCollectionAliases retrieves all collection aliases
+func (c *ServerClient) ListCollectionAliases(ctx context.Context) ([]CollectionAlias, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/aliases", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list aliases: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list aliases: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var wrapper struct {
+		Aliases []CollectionAlias `json:"aliases"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return wrapper.Aliases, nil
+}
+
+// UpsertPreset creates or updates a search preset
+func (c *ServerClient) UpsertPreset(ctx context.Context, preset *Preset) (*Preset, error) {
+	url := fmt.Sprintf("%s/presets/%s", c.baseURL, preset.Name)
+
+	// Only send value in the body
+	body, err := json.Marshal(map[string]any{
+		"value": preset.Value,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal preset: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upsert preset: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to upsert preset: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result Preset
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetPreset retrieves a search preset by name
+func (c *ServerClient) GetPreset(ctx context.Context, name string) (*Preset, error) {
+	url := fmt.Sprintf("%s/presets/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get preset: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get preset: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result Preset
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeletePreset deletes a search preset
+func (c *ServerClient) DeletePreset(ctx context.Context, name string) error {
+	url := fmt.Sprintf("%s/presets/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete preset: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete preset: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// ListPresets retrieves all search presets
+func (c *ServerClient) ListPresets(ctx context.Context) ([]Preset, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/presets", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list presets: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list presets: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var wrapper struct {
+		Presets []Preset `json:"presets"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return wrapper.Presets, nil
+}
+
+// UpsertAnalyticsRule creates or updates an analytics rule
+func (c *ServerClient) UpsertAnalyticsRule(ctx context.Context, rule *AnalyticsRule) (*AnalyticsRule, error) {
+	url := fmt.Sprintf("%s/analytics/rules/%s", c.baseURL, rule.Name)
+
+	// Send type, event_type, and params in the body (not name)
+	body, err := json.Marshal(map[string]any{
+		"type":       rule.Type,
+		"event_type": rule.EventType,
+		"params":     rule.Params,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal analytics rule: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upsert analytics rule: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to upsert analytics rule: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result AnalyticsRule
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetAnalyticsRule retrieves an analytics rule by name
+func (c *ServerClient) GetAnalyticsRule(ctx context.Context, name string) (*AnalyticsRule, error) {
+	url := fmt.Sprintf("%s/analytics/rules/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get analytics rule: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get analytics rule: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result AnalyticsRule
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteAnalyticsRule deletes an analytics rule
+func (c *ServerClient) DeleteAnalyticsRule(ctx context.Context, name string) error {
+	url := fmt.Sprintf("%s/analytics/rules/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete analytics rule: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete analytics rule: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// ListAnalyticsRules retrieves all analytics rules
+func (c *ServerClient) ListAnalyticsRules(ctx context.Context) ([]AnalyticsRule, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/analytics/rules", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list analytics rules: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list analytics rules: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var wrapper struct {
+		Rules []AnalyticsRule `json:"rules"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return wrapper.Rules, nil
 }
 
 // CreateAPIKey creates a new API key
@@ -1060,6 +1457,299 @@ func (c *ServerClient) ListStopwordsSets(ctx context.Context) ([]StopwordsSet, e
 	}
 
 	return wrapper.Stopwords, nil
+}
+
+// NLSearchModel represents a Typesense Natural Language Search Model configuration
+type NLSearchModel struct {
+	ID            string   `json:"id"`
+	ModelName     string   `json:"model_name"`
+	APIKey        string   `json:"api_key,omitempty"`
+	SystemPrompt  string   `json:"system_prompt,omitempty"`
+	MaxBytes      int64    `json:"max_bytes,omitempty"`
+	Temperature   *float64 `json:"temperature,omitempty"`
+	TopP          *float64 `json:"top_p,omitempty"`
+	TopK          *int64   `json:"top_k,omitempty"`
+	AccountID     string   `json:"account_id,omitempty"`     // Cloudflare Workers AI
+	APIURL        string   `json:"api_url,omitempty"`        // vLLM self-hosted
+	ProjectID     string   `json:"project_id,omitempty"`     // GCP Vertex AI
+	AccessToken   string   `json:"access_token,omitempty"`   // GCP Vertex AI
+	RefreshToken  string   `json:"refresh_token,omitempty"`  // GCP Vertex AI
+	ClientID      string   `json:"client_id,omitempty"`      // GCP Vertex AI
+	ClientSecret  string   `json:"client_secret,omitempty"`  // GCP Vertex AI
+	Region        string   `json:"region,omitempty"`         // GCP region
+	StopSequences []string `json:"stop_sequences,omitempty"` // Google models
+	APIVersion    string   `json:"api_version,omitempty"`    // Google API version
+}
+
+// CreateNLSearchModel creates a new Natural Language Search Model
+func (c *ServerClient) CreateNLSearchModel(ctx context.Context, model *NLSearchModel) (*NLSearchModel, error) {
+	body, err := json.Marshal(model)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal NL search model: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/nl_search_models", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create NL search model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Handle 409 Conflict - model already exists, update it instead
+	if resp.StatusCode == http.StatusConflict {
+		return c.UpdateNLSearchModel(ctx, model)
+	}
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to create NL search model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result NLSearchModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetNLSearchModel retrieves a Natural Language Search Model by ID
+func (c *ServerClient) GetNLSearchModel(ctx context.Context, id string) (*NLSearchModel, error) {
+	url := fmt.Sprintf("%s/nl_search_models/%s", c.baseURL, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get NL search model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get NL search model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result NLSearchModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateNLSearchModel updates an existing Natural Language Search Model
+func (c *ServerClient) UpdateNLSearchModel(ctx context.Context, model *NLSearchModel) (*NLSearchModel, error) {
+	body, err := json.Marshal(model)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal NL search model: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/nl_search_models/%s", c.baseURL, model.ID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update NL search model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to update NL search model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result NLSearchModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteNLSearchModel deletes a Natural Language Search Model
+func (c *ServerClient) DeleteNLSearchModel(ctx context.Context, id string) error {
+	url := fmt.Sprintf("%s/nl_search_models/%s", c.baseURL, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete NL search model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete NL search model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// ConversationModel represents a Typesense Conversation Model (RAG) configuration
+type ConversationModel struct {
+	ID                string `json:"id,omitempty"`
+	ModelName         string `json:"model_name"`
+	APIKey            string `json:"api_key,omitempty"`
+	HistoryCollection string `json:"history_collection"`
+	SystemPrompt      string `json:"system_prompt"`
+	TTL               int64  `json:"ttl,omitempty"`
+	MaxBytes          int64  `json:"max_bytes,omitempty"`
+	AccountID         string `json:"account_id,omitempty"` // Cloudflare Workers AI
+	VllmURL           string `json:"vllm_url,omitempty"`   // vLLM self-hosted
+}
+
+// CreateConversationModel creates a new Conversation Model
+func (c *ServerClient) CreateConversationModel(ctx context.Context, model *ConversationModel) (*ConversationModel, error) {
+	body, err := json.Marshal(model)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal conversation model: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/conversations/models", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create conversation model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Handle 409 Conflict - model already exists, update it instead
+	if resp.StatusCode == http.StatusConflict {
+		return c.UpdateConversationModel(ctx, model)
+	}
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to create conversation model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result ConversationModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetConversationModel retrieves a Conversation Model by ID
+func (c *ServerClient) GetConversationModel(ctx context.Context, id string) (*ConversationModel, error) {
+	url := fmt.Sprintf("%s/conversations/models/%s", c.baseURL, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get conversation model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result ConversationModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// UpdateConversationModel updates an existing Conversation Model
+func (c *ServerClient) UpdateConversationModel(ctx context.Context, model *ConversationModel) (*ConversationModel, error) {
+	body, err := json.Marshal(model)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal conversation model: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/conversations/models/%s", c.baseURL, model.ID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update conversation model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to update conversation model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result ConversationModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteConversationModel deletes a Conversation Model
+func (c *ServerClient) DeleteConversationModel(ctx context.Context, id string) error {
+	url := fmt.Sprintf("%s/conversations/models/%s", c.baseURL, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete conversation model: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete conversation model: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
 }
 
 // ListAPIKeys retrieves all API keys

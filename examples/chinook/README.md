@@ -186,6 +186,62 @@ The configuration includes music-related synonyms to improve search:
 - **Media type synonyms**: "mp3" -> "MPEG audio file"
 - **Artist synonyms**: "ac/dc" = "acdc"
 
+## Natural Language Search (Optional)
+
+This example includes an optional Natural Language Search model that uses an LLM (like GPT-4) to convert natural language queries into structured Typesense filters.
+
+### Enabling Natural Language Search
+
+Add your OpenAI API key to enable this feature:
+
+```hcl
+# In terraform.tfvars
+openai_api_key = "sk-your-openai-api-key"
+```
+
+Or via environment variable:
+
+```bash
+export TF_VAR_openai_api_key="sk-your-openai-api-key"
+```
+
+### How It Works
+
+Natural language queries like "rock songs longer than 5 minutes" are automatically converted to structured filters:
+
+| Natural Language Query | Generated Filter |
+|------------------------|------------------|
+| "rock songs" | `filter_by: genre_name:=Rock` |
+| "songs by U2" | `filter_by: artist_name:=U2` |
+| "tracks longer than 5 minutes" | `filter_by: milliseconds:>300000` |
+| "cheap rock songs" | `filter_by: genre_name:=Rock && unit_price:<1.00` |
+
+### Using NL Search
+
+```bash
+# Search with natural language
+curl "https://${TF_VAR_typesense_host}/collections/tracks/documents/search" \
+  -H "X-TYPESENSE-API-KEY: ${TF_VAR_typesense_api_key}" \
+  -d '{
+    "q": "rock songs longer than 5 minutes",
+    "query_by": "name,artist_name,album_title",
+    "nl_query": true,
+    "nl_model_id": "music-nl-search"
+  }'
+```
+
+The `nl_model_id` value is output by Terraform after apply (see `nl_search_model_id` output).
+
+### Customizing the Model
+
+You can change the LLM model in `terraform.tfvars`:
+
+```hcl
+nl_model_name = "openai/gpt-4o"  # More capable but slower/costlier
+# or
+nl_model_name = "openai/gpt-4o-mini"  # Default - fast and cheap
+```
+
 ## Sample Queries
 
 ### Search tracks by title with artist faceting
