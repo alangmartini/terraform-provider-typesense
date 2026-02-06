@@ -45,7 +45,7 @@ type SynonymItem struct {
 // CurationSet represents a Typesense curation set (v30.0+)
 type CurationSet struct {
 	Name       string         `json:"name"`
-	Curations  []CurationItem `json:"curations,omitempty"`
+	Curations  []CurationItem `json:"items,omitempty"` // API expects "items" field, not "curations"
 }
 
 // CurationItem represents a curation item within a curation set (v30.0+)

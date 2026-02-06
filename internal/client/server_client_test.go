@@ -182,9 +182,15 @@ func TestCurationSetJSONSerialization(t *testing.T) {
 		t.Error("Expected 'name' field in JSON output")
 	}
 
-	// Verify "curations" field exists (this is the correct field name for curation sets)
-	if _, ok := result["curations"]; !ok {
-		t.Error("Expected 'curations' field in JSON output")
+	// CRITICAL: Verify API expects "items" field, NOT "curations"
+	// This is the exact issue that caused "Missing or invalid 'items' field" error
+	if _, ok := result["items"]; !ok {
+		t.Error("Expected 'items' field in JSON output - Typesense v30 API requires 'items' not 'curations'")
+	}
+
+	// Verify "curations" is NOT used as the field name
+	if _, ok := result["curations"]; ok {
+		t.Error("'curations' field should not exist - API expects 'items'")
 	}
 }
 
@@ -659,8 +665,8 @@ func TestUpsertCurationSetHTTPPayload(t *testing.T) {
 
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"name":       "test-curation",
-			"curations": []interface{}{},
+			"name":  "test-curation",
+			"items": []interface{}{},
 		})
 	}))
 	defer server.Close()
@@ -689,9 +695,9 @@ func TestUpsertCurationSetHTTPPayload(t *testing.T) {
 		t.Fatalf("UpsertCurationSet failed: %v", err)
 	}
 
-	// Validate the payload
-	if _, ok := receivedPayload["curations"]; !ok {
-		t.Error("Request payload missing 'curations' field")
+	// Validate the payload - API expects "items" field, not "curations"
+	if _, ok := receivedPayload["items"]; !ok {
+		t.Error("Request payload missing 'items' field - Typesense v30 API requires 'items' not 'curations'")
 	}
 	if _, ok := receivedPayload["name"]; !ok {
 		t.Error("Request payload missing 'name' field")
