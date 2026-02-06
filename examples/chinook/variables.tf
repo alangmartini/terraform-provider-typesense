@@ -36,3 +36,10 @@ variable "nl_model_name" {
   description = "LLM model to use for natural language queries"
   default     = "openai/gpt-4o-mini"
 }
+
+# Conversation Model (RAG) configuration
+variable "conversation_model_name" {
+  type        = string
+  description = "LLM model to use for conversational search (RAG)"
+  default     = "openai/gpt-4o-mini"
+}
