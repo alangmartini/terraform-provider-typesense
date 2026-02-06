@@ -169,9 +169,10 @@ type Preset struct {
 
 // AnalyticsRule represents a Typesense analytics rule
 type AnalyticsRule struct {
-	Name   string         `json:"name,omitempty"`
-	Type   string         `json:"type"`
-	Params map[string]any `json:"params"`
+	Name      string         `json:"name,omitempty"`
+	Type      string         `json:"type"`
+	EventType string         `json:"event_type"`
+	Params    map[string]any `json:"params"`
 }
 
 // CreateCollection creates a new collection
@@ -825,10 +826,11 @@ func (c *ServerClient) ListPresets(ctx context.Context) ([]Preset, error) {
 func (c *ServerClient) UpsertAnalyticsRule(ctx context.Context, rule *AnalyticsRule) (*AnalyticsRule, error) {
 	url := fmt.Sprintf("%s/analytics/rules/%s", c.baseURL, rule.Name)
 
-	// Send type and params in the body (not name)
+	// Send type, event_type, and params in the body (not name)
 	body, err := json.Marshal(map[string]any{
-		"type":   rule.Type,
-		"params": rule.Params,
+		"type":       rule.Type,
+		"event_type": rule.EventType,
+		"params":     rule.Params,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal analytics rule: %w", err)

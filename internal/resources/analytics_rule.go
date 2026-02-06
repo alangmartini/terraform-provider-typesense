@@ -30,10 +30,11 @@ type AnalyticsRuleResource struct {
 
 // AnalyticsRuleResourceModel describes the resource data model.
 type AnalyticsRuleResourceModel struct {
-	ID     types.String `tfsdk:"id"`
-	Name   types.String `tfsdk:"name"`
-	Type   types.String `tfsdk:"type"`
-	Params types.String `tfsdk:"params"`
+	ID        types.String `tfsdk:"id"`
+	Name      types.String `tfsdk:"name"`
+	Type      types.String `tfsdk:"type"`
+	EventType types.String `tfsdk:"event_type"`
+	Params    types.String `tfsdk:"params"`
 }
 
 func (r *AnalyticsRuleResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -61,6 +62,13 @@ func (r *AnalyticsRuleResource) Schema(ctx context.Context, req resource.SchemaR
 			"type": schema.StringAttribute{
 				Description: "The type of analytics rule: 'popular_queries' (track frequent searches), 'nohits_queries' (track zero-result searches), or 'counter' (increment popularity based on events).",
 				Required:    true,
+			},
+			"event_type": schema.StringAttribute{
+				Description: "The event type this rule tracks: 'search' for query-based rules (popular_queries, nohits_queries), or 'click'/'conversion'/'visit' for counter rules.",
+				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"params": schema.StringAttribute{
 				Description: "JSON-encoded parameters for the analytics rule. Structure varies by type but typically includes 'source' (collections and events to monitor) and 'destination' (where to store aggregated data).",
@@ -113,9 +121,10 @@ func (r *AnalyticsRuleResource) Create(ctx context.Context, req resource.CreateR
 	}
 
 	rule := &client.AnalyticsRule{
-		Name:   data.Name.ValueString(),
-		Type:   data.Type.ValueString(),
-		Params: params,
+		Name:      data.Name.ValueString(),
+		Type:      data.Type.ValueString(),
+		EventType: data.EventType.ValueString(),
+		Params:    params,
 	}
 
 	created, err := r.client.UpsertAnalyticsRule(ctx, rule)
@@ -151,13 +160,45 @@ func (r *AnalyticsRuleResource) Read(ctx context.Context, req resource.ReadReque
 
 	data.Type = types.StringValue(rule.Type)
 
-	// Convert params back to JSON string
-	paramsBytes, err := json.Marshal(rule.Params)
-	if err != nil {
-		resp.Diagnostics.AddError("Serialization Error", fmt.Sprintf("Unable to serialize analytics rule params: %s", err))
-		return
+	// event_type is not returned by the Typesense API.
+	// For imports (when event_type is null), infer it from the rule type.
+	// For refreshes, preserve the existing state value.
+	if data.EventType.IsNull() || data.EventType.ValueString() == "" {
+		// Infer event_type based on rule type
+		switch rule.Type {
+		case "popular_queries", "nohits_queries":
+			data.EventType = types.StringValue("search")
+		case "counter":
+			// For counter rules, try to extract from params.source.events
+			if source, ok := rule.Params["source"].(map[string]any); ok {
+				if events, ok := source["events"].([]any); ok && len(events) > 0 {
+					if event, ok := events[0].(map[string]any); ok {
+						if eventType, ok := event["type"].(string); ok {
+							data.EventType = types.StringValue(eventType)
+						}
+					}
+				}
+			}
+			// Default to "click" if we couldn't extract it
+			if data.EventType.IsNull() || data.EventType.ValueString() == "" {
+				data.EventType = types.StringValue("click")
+			}
+		default:
+			data.EventType = types.StringValue("search")
+		}
 	}
-	data.Params = types.StringValue(string(paramsBytes))
+
+	// For imports (when params is null), populate from API response.
+	// For refreshes, preserve the user's original params to avoid drift
+	// from server-side defaults (like expand_query, limit).
+	if data.Params.IsNull() || data.Params.ValueString() == "" {
+		paramsBytes, err := json.Marshal(rule.Params)
+		if err != nil {
+			resp.Diagnostics.AddError("Serialization Error", fmt.Sprintf("Unable to serialize analytics rule params: %s", err))
+			return
+		}
+		data.Params = types.StringValue(string(paramsBytes))
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -179,9 +220,10 @@ func (r *AnalyticsRuleResource) Update(ctx context.Context, req resource.UpdateR
 	}
 
 	rule := &client.AnalyticsRule{
-		Name:   data.Name.ValueString(),
-		Type:   data.Type.ValueString(),
-		Params: params,
+		Name:      data.Name.ValueString(),
+		Type:      data.Type.ValueString(),
+		EventType: data.EventType.ValueString(),
+		Params:    params,
 	}
 
 	_, err := r.client.UpsertAnalyticsRule(ctx, rule)

@@ -23,14 +23,16 @@ func TestAccAnalyticsRuleResource_popularQueries(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "name", rName),
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "type", "popular_queries"),
+					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "event_type", "search"),
 					resource.TestCheckResourceAttrSet("typesense_analytics_rule.test", "id"),
 					resource.TestCheckResourceAttrSet("typesense_analytics_rule.test", "params"),
 				),
 			},
 			{
-				ResourceName:      "typesense_analytics_rule.test",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "typesense_analytics_rule.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"params"}, // API returns additional server-side defaults
 			},
 		},
 	})
@@ -50,6 +52,7 @@ func TestAccAnalyticsRuleResource_nohitsQueries(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "name", rName),
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "type", "nohits_queries"),
+					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "event_type", "search"),
 				),
 			},
 		},
@@ -69,6 +72,7 @@ func TestAccAnalyticsRuleResource_counter(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "name", rName),
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "type", "counter"),
+					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "event_type", "click"),
 				),
 			},
 		},
@@ -131,8 +135,9 @@ resource "typesense_collection" "queries" {
 }
 
 resource "typesense_analytics_rule" "test" {
-  name = %[1]q
-  type = "popular_queries"
+  name       = %[1]q
+  type       = "popular_queries"
+  event_type = "search"
   params = jsonencode({
     source = {
       collections = [typesense_collection.source.name]
@@ -177,8 +182,9 @@ resource "typesense_collection" "queries" {
 }
 
 resource "typesense_analytics_rule" "test" {
-  name = %[1]q
-  type = "popular_queries"
+  name       = %[1]q
+  type       = "popular_queries"
+  event_type = "search"
   params = jsonencode({
     source = {
       collections = [typesense_collection.source.name]
@@ -224,8 +230,9 @@ resource "typesense_collection" "nohits" {
 }
 
 resource "typesense_analytics_rule" "test" {
-  name = %[1]q
-  type = "nohits_queries"
+  name       = %[1]q
+  type       = "nohits_queries"
+  event_type = "search"
   params = jsonencode({
     source = {
       collections = [typesense_collection.source.name]
@@ -262,8 +269,9 @@ resource "typesense_collection" "source" {
 }
 
 resource "typesense_analytics_rule" "test" {
-  name = %[1]q
-  type = "counter"
+  name       = %[1]q
+  type       = "counter"
+  event_type = "click"
   params = jsonencode({
     source = {
       collections = [typesense_collection.source.name]

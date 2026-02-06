@@ -61,8 +61,9 @@ resource "typesense_collection" "album_queries" {
 
 # Track popular track searches
 resource "typesense_analytics_rule" "track_popular_queries" {
-  name = "track-popular-queries"
-  type = "popular_queries"
+  name       = "track-popular-queries"
+  type       = "popular_queries"
+  event_type = "search"
   params = jsonencode({
     source = {
       collections = [typesense_collection.tracks.name]
@@ -76,8 +77,9 @@ resource "typesense_analytics_rule" "track_popular_queries" {
 
 # Track popular album searches
 resource "typesense_analytics_rule" "album_popular_queries" {
-  name = "album-popular-queries"
-  type = "popular_queries"
+  name       = "album-popular-queries"
+  type       = "popular_queries"
+  event_type = "search"
   params = jsonencode({
     source = {
       collections = [typesense_collection.albums.name]
@@ -96,8 +98,9 @@ resource "typesense_analytics_rule" "album_popular_queries" {
 
 # Track track searches with no results
 resource "typesense_analytics_rule" "track_nohits" {
-  name = "track-nohits-queries"
-  type = "nohits_queries"
+  name       = "track-nohits-queries"
+  type       = "nohits_queries"
+  event_type = "search"
   params = jsonencode({
     source = {
       collections = [typesense_collection.tracks.name]
@@ -116,8 +119,9 @@ resource "typesense_analytics_rule" "track_nohits" {
 
 # Track track popularity based on clicks and plays
 resource "typesense_analytics_rule" "track_popularity" {
-  name = "track-popularity-counter"
-  type = "counter"
+  name       = "track-popularity-counter"
+  type       = "counter"
+  event_type = "click"
   params = jsonencode({
     source = {
       collections = [typesense_collection.tracks.name]
