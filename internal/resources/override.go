@@ -134,7 +134,7 @@ func (r *OverrideResource) Schema(ctx context.Context, req resource.SchemaReques
 				Description: "Remove matched tokens from the query.",
 				Optional:    true,
 				Computed:    true,
-				Default:     booldefault.StaticBool(false),
+				Default:     booldefault.StaticBool(true),
 			},
 			"filter_curated_hits": schema.BoolAttribute{
 				Description: "Apply filters to curated hits as well.",
@@ -154,7 +154,7 @@ func (r *OverrideResource) Schema(ctx context.Context, req resource.SchemaReques
 				Description: "Stop processing further overrides if this one matches.",
 				Optional:    true,
 				Computed:    true,
-				Default:     booldefault.StaticBool(false),
+				Default:     booldefault.StaticBool(true),
 			},
 		},
 		Blocks: map[string]schema.Block{
@@ -452,9 +452,21 @@ func (r *OverrideResource) modelToOverride(ctx context.Context, data *OverrideRe
 }
 
 func (r *OverrideResource) updateModelFromOverride(ctx context.Context, data *OverrideResourceModel, override *client.Override) {
-	data.FilterBy = types.StringValue(override.FilterBy)
-	data.SortBy = types.StringValue(override.SortBy)
-	data.ReplaceQuery = types.StringValue(override.ReplaceQuery)
+	if override.FilterBy != "" {
+		data.FilterBy = types.StringValue(override.FilterBy)
+	} else {
+		data.FilterBy = types.StringNull()
+	}
+	if override.SortBy != "" {
+		data.SortBy = types.StringValue(override.SortBy)
+	} else {
+		data.SortBy = types.StringNull()
+	}
+	if override.ReplaceQuery != "" {
+		data.ReplaceQuery = types.StringValue(override.ReplaceQuery)
+	} else {
+		data.ReplaceQuery = types.StringNull()
+	}
 	data.RemoveMatchedTokens = types.BoolValue(override.RemoveMatchedTokens)
 	data.FilterCuratedHits = types.BoolValue(override.FilterCuratedHits)
 	data.StopProcessing = types.BoolValue(override.StopProcessing)
