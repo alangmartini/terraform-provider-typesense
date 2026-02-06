@@ -161,3 +161,37 @@ output "stopwords_sets" {
     }
   }
 }
+
+# =============================================================================
+# COLLECTION ALIASES
+# =============================================================================
+
+output "collection_aliases" {
+  description = "Collection aliases for stable application endpoints"
+  value = {
+    music = {
+      alias      = typesense_collection_alias.music.name
+      collection = typesense_collection_alias.music.collection_name
+    }
+    catalog = {
+      alias      = typesense_collection_alias.catalog.name
+      collection = typesense_collection_alias.catalog.collection_name
+    }
+    artists = {
+      alias      = typesense_collection_alias.artists.name
+      collection = typesense_collection_alias.artists.collection_name
+    }
+    customers = {
+      alias      = typesense_collection_alias.customers.name
+      collection = typesense_collection_alias.customers.collection_name
+    }
+    orders = {
+      alias      = typesense_collection_alias.orders.name
+      collection = typesense_collection_alias.orders.collection_name
+    }
+    playlists = {
+      alias      = typesense_collection_alias.playlists.name
+      collection = typesense_collection_alias.playlists.collection_name
+    }
+  }
+}
