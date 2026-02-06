@@ -22,3 +22,17 @@ variable "typesense_protocol" {
   description = "Typesense server protocol"
   default     = "https"
 }
+
+# Natural Language Search configuration
+variable "openai_api_key" {
+  type        = string
+  description = "OpenAI API key for natural language search (optional - set to enable NL queries)"
+  sensitive   = true
+  default     = ""
+}
+
+variable "nl_model_name" {
+  type        = string
+  description = "LLM model to use for natural language queries"
+  default     = "openai/gpt-4o-mini"
+}

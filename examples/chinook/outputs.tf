@@ -122,3 +122,17 @@ output "all_collections" {
     }
   }
 }
+
+# =============================================================================
+# NATURAL LANGUAGE SEARCH
+# =============================================================================
+
+output "nl_search_model_id" {
+  description = "ID of the Natural Language Search model (use this as nl_model_id in search queries)"
+  value       = length(typesense_nl_search_model.music_search) > 0 ? typesense_nl_search_model.music_search[0].id : null
+}
+
+output "nl_search_enabled" {
+  description = "Whether Natural Language Search is enabled"
+  value       = length(typesense_nl_search_model.music_search) > 0
+}
