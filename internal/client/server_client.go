@@ -161,6 +161,12 @@ type CollectionAlias struct {
 	CollectionName string `json:"collection_name"`
 }
 
+// Preset represents a Typesense search preset
+type Preset struct {
+	Name  string         `json:"name,omitempty"`
+	Value map[string]any `json:"value"`
+}
+
 // CreateCollection creates a new collection
 func (c *ServerClient) CreateCollection(ctx context.Context, collection *Collection) (*Collection, error) {
 	body, err := json.Marshal(collection)
@@ -681,6 +687,131 @@ func (c *ServerClient) ListCollectionAliases(ctx context.Context) ([]CollectionA
 	}
 
 	return wrapper.Aliases, nil
+}
+
+// UpsertPreset creates or updates a search preset
+func (c *ServerClient) UpsertPreset(ctx context.Context, preset *Preset) (*Preset, error) {
+	url := fmt.Sprintf("%s/presets/%s", c.baseURL, preset.Name)
+
+	// Only send value in the body
+	body, err := json.Marshal(map[string]any{
+		"value": preset.Value,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal preset: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upsert preset: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to upsert preset: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result Preset
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetPreset retrieves a search preset by name
+func (c *ServerClient) GetPreset(ctx context.Context, name string) (*Preset, error) {
+	url := fmt.Sprintf("%s/presets/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get preset: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get preset: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result Preset
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeletePreset deletes a search preset
+func (c *ServerClient) DeletePreset(ctx context.Context, name string) error {
+	url := fmt.Sprintf("%s/presets/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete preset: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete preset: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// ListPresets retrieves all search presets
+func (c *ServerClient) ListPresets(ctx context.Context) ([]Preset, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/presets", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list presets: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list presets: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var wrapper struct {
+		Presets []Preset `json:"presets"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return wrapper.Presets, nil
 }
 
 // CreateAPIKey creates a new API key
