@@ -23,6 +23,7 @@ func TestAccAnalyticsRuleResource_popularQueries(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "name", rName),
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "type", "popular_queries"),
+					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "collection", collectionName),
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "event_type", "search"),
 					resource.TestCheckResourceAttrSet("typesense_analytics_rule.test", "id"),
 					resource.TestCheckResourceAttrSet("typesense_analytics_rule.test", "params"),
@@ -52,6 +53,7 @@ func TestAccAnalyticsRuleResource_nohitsQueries(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "name", rName),
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "type", "nohits_queries"),
+					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "collection", collectionName),
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "event_type", "search"),
 				),
 			},
@@ -72,6 +74,7 @@ func TestAccAnalyticsRuleResource_counter(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "name", rName),
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "type", "counter"),
+					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "collection", collectionName),
 					resource.TestCheckResourceAttr("typesense_analytics_rule.test", "event_type", "click"),
 				),
 			},
@@ -137,15 +140,11 @@ resource "typesense_collection" "queries" {
 resource "typesense_analytics_rule" "test" {
   name       = %[1]q
   type       = "popular_queries"
+  collection = typesense_collection.source.name
   event_type = "search"
   params = jsonencode({
-    source = {
-      collections = [typesense_collection.source.name]
-    }
-    destination = {
-      collection = typesense_collection.queries.name
-    }
-    limit = 1000
+    destination_collection = typesense_collection.queries.name
+    limit                  = 1000
   })
 }
 `, ruleName, collectionName, destCollectionName)
@@ -184,16 +183,12 @@ resource "typesense_collection" "queries" {
 resource "typesense_analytics_rule" "test" {
   name       = %[1]q
   type       = "popular_queries"
+  collection = typesense_collection.source.name
   event_type = "search"
   params = jsonencode({
-    source = {
-      collections = [typesense_collection.source.name]
-    }
-    destination = {
-      collection = typesense_collection.queries.name
-    }
-    limit        = 500
-    expand_query = true
+    destination_collection = typesense_collection.queries.name
+    limit                  = 500
+    expand_query           = true
   })
 }
 `, ruleName, collectionName, destCollectionName)
@@ -232,15 +227,11 @@ resource "typesense_collection" "nohits" {
 resource "typesense_analytics_rule" "test" {
   name       = %[1]q
   type       = "nohits_queries"
+  collection = typesense_collection.source.name
   event_type = "search"
   params = jsonencode({
-    source = {
-      collections = [typesense_collection.source.name]
-    }
-    destination = {
-      collection = typesense_collection.nohits.name
-    }
-    limit = 1000
+    destination_collection = typesense_collection.nohits.name
+    limit                  = 1000
   })
 }
 `, ruleName, collectionName, destCollectionName)
@@ -271,27 +262,12 @@ resource "typesense_collection" "source" {
 resource "typesense_analytics_rule" "test" {
   name       = %[1]q
   type       = "counter"
+  collection = typesense_collection.source.name
   event_type = "click"
   params = jsonencode({
-    source = {
-      collections = [typesense_collection.source.name]
-      events = [
-        {
-          type   = "click"
-          weight = 1
-          name   = "click_event"
-        },
-        {
-          type   = "conversion"
-          weight = 5
-          name   = "purchase_event"
-        }
-      ]
-    }
-    destination = {
-      collection    = typesense_collection.source.name
-      counter_field = "popularity"
-    }
+    destination_collection = typesense_collection.source.name
+    counter_field          = "popularity"
+    weight                 = 1
   })
 }
 `, ruleName, collectionName)
