@@ -7,6 +7,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Always create a new branch when starting work** on a feature or fix. Use descriptive branch names that reflect the work being done.
 - **Commit each atomic change** separately. Each commit should represent a single logical change that can stand on its own.
 
+## Test-Driven Development (TDD)
+
+**Always follow TDD when fixing bugs:**
+1. When an error is reported, first create a test that reproduces the error
+2. Verify the test fails with the expected error
+3. Only then implement the fix
+4. Continue until the test passes
+
+This ensures we understand the root cause and have regression coverage.
+
 ## Testing Requirements
 
 - **Run E2E tests after implementing new features.** After completing any new feature or significant bug fix, run the E2E testbed to verify the provider still works correctly:
