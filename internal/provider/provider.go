@@ -131,6 +131,7 @@ func (p *TypesenseProvider) Resources(ctx context.Context) []func() resource.Res
 		resources.NewOverrideResource,
 		resources.NewStopwordsSetResource,
 		resources.NewAPIKeyResource,
+		resources.NewNLSearchModelResource,
 	}
 }
 
