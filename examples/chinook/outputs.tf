@@ -195,3 +195,37 @@ output "collection_aliases" {
     }
   }
 }
+
+# =============================================================================
+# SEARCH PRESETS
+# =============================================================================
+
+output "search_presets" {
+  description = "Configured search presets for different use cases"
+  value = {
+    tracks = {
+      listing      = typesense_preset.track_listing.name
+      faceted      = typesense_preset.track_search_faceted.name
+      autocomplete = typesense_preset.track_autocomplete.name
+    }
+    albums = {
+      browse    = typesense_preset.album_browse.name
+      discovery = typesense_preset.album_discovery.name
+    }
+    artists = {
+      directory    = typesense_preset.artist_directory.name
+      autocomplete = typesense_preset.artist_autocomplete.name
+    }
+    customers = {
+      lookup    = typesense_preset.customer_lookup.name
+      analytics = typesense_preset.customer_analytics.name
+    }
+    orders = {
+      recent = typesense_preset.recent_orders.name
+      search = typesense_preset.order_search.name
+    }
+    playlists = {
+      browse = typesense_preset.playlist_browse.name
+    }
+  }
+}
