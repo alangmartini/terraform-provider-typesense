@@ -229,3 +229,32 @@ output "search_presets" {
     }
   }
 }
+
+# =============================================================================
+# ANALYTICS RULES
+# =============================================================================
+
+output "analytics_rules" {
+  description = "Configured analytics rules for tracking search behavior"
+  value = {
+    popular_queries = {
+      tracks = typesense_analytics_rule.track_popular_queries.name
+      albums = typesense_analytics_rule.album_popular_queries.name
+    }
+    nohits_queries = {
+      tracks = typesense_analytics_rule.track_nohits.name
+    }
+    counters = {
+      track_popularity = typesense_analytics_rule.track_popularity.name
+    }
+  }
+}
+
+output "analytics_collections" {
+  description = "Collections storing analytics data"
+  value = {
+    track_queries  = typesense_collection.track_queries.name
+    album_queries  = typesense_collection.album_queries.name
+    nohits_queries = typesense_collection.nohits_queries.name
+  }
+}
