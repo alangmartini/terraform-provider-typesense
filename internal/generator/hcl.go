@@ -2,7 +2,6 @@ package generator
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
 	"github.com/hashicorp/hcl/v2/hclwrite"
@@ -80,7 +79,7 @@ func generateCollectionBlock(c *client.Collection, resourceName string) *hclwrit
 		if field.Index != nil && !*field.Index {
 			fieldBody.SetAttributeValue("index", cty.BoolVal(false))
 		}
-		if field.Sort {
+		if field.Sort != nil && *field.Sort {
 			fieldBody.SetAttributeValue("sort", cty.BoolVal(true))
 		}
 		if field.Infix {
@@ -251,14 +250,4 @@ func generateClusterBlock(cl *client.Cluster, resourceName string) *hclwrite.Blo
 	}
 
 	return block
-}
-
-// sortedMapKeys returns sorted keys from a map for deterministic output
-func sortedMapKeys(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }

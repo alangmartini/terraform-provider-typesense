@@ -181,3 +181,65 @@ resource "typesense_collection" "test" {
 }
 `, name)
 }
+
+// TestAccCollectionResource_numericWithoutSort tests that numeric fields
+// without explicit sort configuration work correctly with Typesense's
+// server-side defaults (sort=true for numeric types).
+func TestAccCollectionResource_numericWithoutSort(t *testing.T) {
+	rName := acctest.RandomWithPrefix("test-collection")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCollectionResourceConfig_numericWithoutSort(rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("typesense_collection.test", "name", rName),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.#", "4"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.0.name", "id"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.1.name", "title"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.name", "count"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.type", "int32"),
+					// Typesense defaults sort=true for numeric types
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.sort", "true"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.3.name", "price"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.3.type", "float"),
+					// Typesense defaults sort=true for numeric types
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.3.sort", "true"),
+				),
+			},
+		},
+	})
+}
+
+func testAccCollectionResourceConfig_numericWithoutSort(name string) string {
+	return fmt.Sprintf(`
+resource "typesense_collection" "test" {
+  name = %[1]q
+
+  field {
+    name = "id"
+    type = "string"
+  }
+
+  field {
+    name = "title"
+    type = "string"
+  }
+
+  # Numeric field without explicit sort - Typesense defaults to sort=true
+  field {
+    name = "count"
+    type = "int32"
+  }
+
+  # Float field without explicit sort - Typesense defaults to sort=true
+  field {
+    name     = "price"
+    type     = "float"
+    optional = true
+  }
+}
+`, name)
+}

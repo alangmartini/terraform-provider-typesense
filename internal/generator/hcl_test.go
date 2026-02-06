@@ -26,6 +26,7 @@ func containsAttr(hcl, attrName, attrValue string) bool {
 
 func TestGenerateCollectionBlock(t *testing.T) {
 	indexFalse := false
+	sortTrue := true
 	collection := &client.Collection{
 		Name:                "products",
 		DefaultSortingField: "popularity",
@@ -46,7 +47,7 @@ func TestGenerateCollectionBlock(t *testing.T) {
 			{
 				Name:   "price",
 				Type:   "float",
-				Sort:   true,
+				Sort:   &sortTrue,
 				Locale: "en",
 			},
 		},

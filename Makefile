@@ -1,4 +1,4 @@
-.PHONY: test test-acc start-typesense stop-typesense build clean \
+.PHONY: test test-acc test-consistency start-typesense stop-typesense build clean \
 	testbed-up testbed-down testbed-seed testbed-e2e testbed-verify testbed-clean
 
 # Configuration
@@ -71,6 +71,24 @@ test-acc:
 	@$(MAKE) stop-typesense
 	@echo ""
 	@echo "✓ Acceptance tests complete!"
+
+# Run consistency tests against the testbed
+# These tests catch "inconsistent result after apply" errors from server-side default mismatches
+test-consistency:
+	@echo "Running consistency tests against testbed..."
+	@if ! curl -sf http://localhost:8108/health > /dev/null 2>&1; then \
+		echo "Error: Testbed not running. Run 'make testbed-up' first."; \
+		exit 1; \
+	fi
+	@echo ""
+	@export TYPESENSE_HOST=localhost && \
+	export TYPESENSE_PORT=8108 && \
+	export TYPESENSE_PROTOCOL=http && \
+	export TYPESENSE_API_KEY=source-test-api-key && \
+	export TF_ACC=1 && \
+	go test -v -run "TestAccCollectionResource_(minimal|numeric|string|explicit|allField|mixed|object|geopoint)" ./internal/resources
+	@echo ""
+	@echo "✓ Consistency tests complete!"
 
 # Clean up build artifacts and test data
 clean:
