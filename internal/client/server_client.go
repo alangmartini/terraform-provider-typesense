@@ -167,6 +167,13 @@ type Preset struct {
 	Value map[string]any `json:"value"`
 }
 
+// AnalyticsRule represents a Typesense analytics rule
+type AnalyticsRule struct {
+	Name   string         `json:"name,omitempty"`
+	Type   string         `json:"type"`
+	Params map[string]any `json:"params"`
+}
+
 // CreateCollection creates a new collection
 func (c *ServerClient) CreateCollection(ctx context.Context, collection *Collection) (*Collection, error) {
 	body, err := json.Marshal(collection)
@@ -812,6 +819,132 @@ func (c *ServerClient) ListPresets(ctx context.Context) ([]Preset, error) {
 	}
 
 	return wrapper.Presets, nil
+}
+
+// UpsertAnalyticsRule creates or updates an analytics rule
+func (c *ServerClient) UpsertAnalyticsRule(ctx context.Context, rule *AnalyticsRule) (*AnalyticsRule, error) {
+	url := fmt.Sprintf("%s/analytics/rules/%s", c.baseURL, rule.Name)
+
+	// Send type and params in the body (not name)
+	body, err := json.Marshal(map[string]any{
+		"type":   rule.Type,
+		"params": rule.Params,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal analytics rule: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upsert analytics rule: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to upsert analytics rule: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result AnalyticsRule
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetAnalyticsRule retrieves an analytics rule by name
+func (c *ServerClient) GetAnalyticsRule(ctx context.Context, name string) (*AnalyticsRule, error) {
+	url := fmt.Sprintf("%s/analytics/rules/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get analytics rule: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get analytics rule: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result AnalyticsRule
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteAnalyticsRule deletes an analytics rule
+func (c *ServerClient) DeleteAnalyticsRule(ctx context.Context, name string) error {
+	url := fmt.Sprintf("%s/analytics/rules/%s", c.baseURL, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete analytics rule: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete analytics rule: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// ListAnalyticsRules retrieves all analytics rules
+func (c *ServerClient) ListAnalyticsRules(ctx context.Context) ([]AnalyticsRule, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/analytics/rules", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list analytics rules: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list analytics rules: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var wrapper struct {
+		Rules []AnalyticsRule `json:"rules"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return wrapper.Rules, nil
 }
 
 // CreateAPIKey creates a new API key
