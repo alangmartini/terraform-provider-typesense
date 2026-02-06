@@ -45,3 +45,18 @@ The `testbed/` directory contains infrastructure for full end-to-end testing:
 - `make testbed-e2e` - Run complete migration test workflow
 - `make testbed-verify` - Verify target matches source
 - `make testbed-down` - Stop and clean up clusters
+
+## Adding New Resources
+
+When adding a new Terraform resource:
+1. Add client methods in `internal/client/server_client.go`
+2. Create resource file in `internal/resources/{resource_name}.go`
+3. Register in `internal/provider/provider.go` Resources() function
+4. Rebuild binary: `go build -o terraform-provider-typesense .`
+5. Run `terraform validate` in examples to verify schema is recognized
+
+## Terraform Development Notes
+
+- **Dev override caching**: After adding new resources, must rebuild binary before `terraform validate` picks up changes
+- **Sensitive variable transitivity**: Outputs using `count` based on sensitive vars inherit sensitivity; use `length(resource.name) > 0` pattern instead
+- **Optional resource pattern**: Use `count = var.x != "" ? 1 : 0` for conditionally created resources
