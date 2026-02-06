@@ -3,7 +3,7 @@
 	testbed-up testbed-down testbed-seed testbed-e2e testbed-verify testbed-clean
 
 # Configuration
-TYPESENSE_API_KEY := test-api-key-for-acceptance-tests
+TYPESENSE_API_KEY ?= test-api-key-for-acceptance-tests
 PORT := 8108
 CONTAINER_NAME := typesense-test
 TYPESENSE_HOST := localhost
@@ -80,7 +80,7 @@ test-acc-ci:
 	@export TYPESENSE_HOST=$${TYPESENSE_HOST:-localhost} && \
 	export TYPESENSE_PORT=$${TYPESENSE_PORT:-8108} && \
 	export TYPESENSE_PROTOCOL=$${TYPESENSE_PROTOCOL:-http} && \
-	export TYPESENSE_API_KEY=$${TYPESENSE_API_KEY:-source-test-api-key} && \
+	export TYPESENSE_API_KEY=$${TYPESENSE_API_KEY:-test-api-key-for-acceptance-tests} && \
 	export TF_ACC=1 && \
 	go test -v -timeout 30m ./internal/resources/...
 	@echo ""
