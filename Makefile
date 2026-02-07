@@ -1,6 +1,7 @@
 .PHONY: test test-acc test-acc-ci test-consistency test-conversation-model \
 	start-typesense stop-typesense build clean \
-	testbed-up testbed-down testbed-seed testbed-e2e testbed-verify testbed-clean
+	testbed-up testbed-down testbed-seed testbed-e2e testbed-verify testbed-clean \
+	chinook-apply chinook-destroy chinook-test
 
 # Configuration
 TYPESENSE_API_KEY ?= test-api-key-for-acceptance-tests
@@ -8,6 +9,13 @@ PORT := 8108
 CONTAINER_NAME := typesense-test
 TYPESENSE_HOST := localhost
 TYPESENSE_PROTOCOL := http
+
+# Chinook example configuration
+CHINOOK_DIR := $(PWD)/examples/chinook
+
+# Load .env file if it exists (for TEST_OPENAI_API_KEY)
+-include .env
+export
 
 # Build the provider binary
 build:
@@ -176,3 +184,62 @@ testbed-clean:
 	@docker compose -f $(TESTBED_COMPOSE) down -v 2>/dev/null || true
 	@rm -rf $(TESTBED_DIR)/export
 	@echo "✓ Testbed cleaned!"
+
+# ==============================================================================
+# Chinook Example Testing Targets
+# ==============================================================================
+
+# Apply chinook example to local Typesense
+chinook-apply:
+	@echo "Applying chinook example to local Typesense..."
+	@if ! curl -sf http://localhost:$(PORT)/health > /dev/null 2>&1; then \
+		echo "Error: Typesense not running. Run 'make start-typesense' first."; \
+		exit 1; \
+	fi
+	@if [ -n "$(TEST_OPENAI_API_KEY)" ]; then \
+		echo "OpenAI API key found - NL Search and Conversation Model will be tested"; \
+	else \
+		echo "No OpenAI API key - skipping NL Search and Conversation Model resources"; \
+	fi
+	@cd $(CHINOOK_DIR) && \
+		if grep -q "alanm/typesense" ~/.terraformrc 2>/dev/null; then \
+			echo "Dev override detected - skipping terraform init"; \
+		else \
+			terraform init; \
+		fi && \
+		terraform apply -auto-approve \
+			-var="typesense_api_key=$(TYPESENSE_API_KEY)" \
+			-var="typesense_host=$(TYPESENSE_HOST)" \
+			-var="typesense_port=$(PORT)" \
+			-var="typesense_protocol=$(TYPESENSE_PROTOCOL)" \
+			-var="openai_api_key=$(TEST_OPENAI_API_KEY)"
+	@echo ""
+	@echo "✓ Chinook example applied successfully!"
+
+# Destroy chinook resources
+chinook-destroy:
+	@echo "Destroying chinook example resources..."
+	@cd $(CHINOOK_DIR) && \
+		terraform destroy -auto-approve \
+			-var="typesense_api_key=$(TYPESENSE_API_KEY)" \
+			-var="typesense_host=$(TYPESENSE_HOST)" \
+			-var="typesense_port=$(PORT)" \
+			-var="typesense_protocol=$(TYPESENSE_PROTOCOL)" \
+			-var="openai_api_key=$(TEST_OPENAI_API_KEY)" || true
+	@echo "✓ Chinook resources destroyed!"
+
+# Full chinook test cycle
+chinook-test:
+	@echo "Running full chinook example test..."
+	@$(MAKE) start-typesense
+	@$(MAKE) chinook-apply || ($(MAKE) stop-typesense && exit 1)
+	@echo ""
+	@echo "Verifying resources were created..."
+	@curl -sf "http://localhost:$(PORT)/collections" \
+		-H "X-TYPESENSE-API-KEY: $(TYPESENSE_API_KEY)" | \
+		jq -r '.[] | .name' | sort
+	@echo ""
+	@$(MAKE) chinook-destroy
+	@$(MAKE) stop-typesense
+	@echo ""
+	@echo "✓ Chinook test complete!"
