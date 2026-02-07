@@ -63,15 +63,11 @@ resource "typesense_collection" "album_queries" {
 resource "typesense_analytics_rule" "track_popular_queries" {
   name       = "track-popular-queries"
   type       = "popular_queries"
+  collection = typesense_collection.tracks.name
   event_type = "search"
   params = jsonencode({
-    source = {
-      collections = [typesense_collection.tracks.name]
-    }
-    destination = {
-      collection = typesense_collection.track_queries.name
-    }
-    limit = 1000
+    destination_collection = typesense_collection.track_queries.name
+    limit                  = 1000
   })
 }
 
@@ -79,15 +75,11 @@ resource "typesense_analytics_rule" "track_popular_queries" {
 resource "typesense_analytics_rule" "album_popular_queries" {
   name       = "album-popular-queries"
   type       = "popular_queries"
+  collection = typesense_collection.albums.name
   event_type = "search"
   params = jsonencode({
-    source = {
-      collections = [typesense_collection.albums.name]
-    }
-    destination = {
-      collection = typesense_collection.album_queries.name
-    }
-    limit = 500
+    destination_collection = typesense_collection.album_queries.name
+    limit                  = 500
   })
 }
 
@@ -100,15 +92,11 @@ resource "typesense_analytics_rule" "album_popular_queries" {
 resource "typesense_analytics_rule" "track_nohits" {
   name       = "track-nohits-queries"
   type       = "nohits_queries"
+  collection = typesense_collection.tracks.name
   event_type = "search"
   params = jsonencode({
-    source = {
-      collections = [typesense_collection.tracks.name]
-    }
-    destination = {
-      collection = typesense_collection.nohits_queries.name
-    }
-    limit = 500
+    destination_collection = typesense_collection.nohits_queries.name
+    limit                  = 500
   })
 }
 
@@ -121,26 +109,11 @@ resource "typesense_analytics_rule" "track_nohits" {
 resource "typesense_analytics_rule" "track_popularity" {
   name       = "track-popularity-counter"
   type       = "counter"
+  collection = typesense_collection.tracks.name
   event_type = "click"
   params = jsonencode({
-    source = {
-      collections = [typesense_collection.tracks.name]
-      events = [
-        {
-          type   = "click"
-          weight = 1
-          name   = "track_click"
-        },
-        {
-          type   = "conversion"
-          weight = 3
-          name   = "track_play"
-        }
-      ]
-    }
-    destination = {
-      collection    = typesense_collection.tracks.name
-      counter_field = "popularity_score"
-    }
+    destination_collection = typesense_collection.tracks.name
+    counter_field          = "popularity_score"
+    weight                 = 1
   })
 }

@@ -30,11 +30,12 @@ type AnalyticsRuleResource struct {
 
 // AnalyticsRuleResourceModel describes the resource data model.
 type AnalyticsRuleResourceModel struct {
-	ID        types.String `tfsdk:"id"`
-	Name      types.String `tfsdk:"name"`
-	Type      types.String `tfsdk:"type"`
-	EventType types.String `tfsdk:"event_type"`
-	Params    types.String `tfsdk:"params"`
+	ID         types.String `tfsdk:"id"`
+	Name       types.String `tfsdk:"name"`
+	Type       types.String `tfsdk:"type"`
+	Collection types.String `tfsdk:"collection"`
+	EventType  types.String `tfsdk:"event_type"`
+	Params     types.String `tfsdk:"params"`
 }
 
 func (r *AnalyticsRuleResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -61,6 +62,10 @@ func (r *AnalyticsRuleResource) Schema(ctx context.Context, req resource.SchemaR
 			},
 			"type": schema.StringAttribute{
 				Description: "The type of analytics rule: 'popular_queries' (track frequent searches), 'nohits_queries' (track zero-result searches), or 'counter' (increment popularity based on events).",
+				Required:    true,
+			},
+			"collection": schema.StringAttribute{
+				Description: "The source collection to track analytics for. This is the collection whose searches/events will be monitored.",
 				Required:    true,
 			},
 			"event_type": schema.StringAttribute{
@@ -121,10 +126,11 @@ func (r *AnalyticsRuleResource) Create(ctx context.Context, req resource.CreateR
 	}
 
 	rule := &client.AnalyticsRule{
-		Name:      data.Name.ValueString(),
-		Type:      data.Type.ValueString(),
-		EventType: data.EventType.ValueString(),
-		Params:    params,
+		Name:       data.Name.ValueString(),
+		Type:       data.Type.ValueString(),
+		Collection: data.Collection.ValueString(),
+		EventType:  data.EventType.ValueString(),
+		Params:     params,
 	}
 
 	created, err := r.client.UpsertAnalyticsRule(ctx, rule)
@@ -159,6 +165,21 @@ func (r *AnalyticsRuleResource) Read(ctx context.Context, req resource.ReadReque
 	}
 
 	data.Type = types.StringValue(rule.Type)
+
+	// For imports (when collection is null), populate from API response
+	if data.Collection.IsNull() || data.Collection.ValueString() == "" {
+		if rule.Collection != "" {
+			// v30+ format: collection is at top level
+			data.Collection = types.StringValue(rule.Collection)
+		} else if source, ok := rule.Params["source"].(map[string]any); ok {
+			// Pre-v30 format: collection is in params.source.collections
+			if collections, ok := source["collections"].([]any); ok && len(collections) > 0 {
+				if coll, ok := collections[0].(string); ok {
+					data.Collection = types.StringValue(coll)
+				}
+			}
+		}
+	}
 
 	// event_type is not returned by the Typesense API.
 	// For imports (when event_type is null), infer it from the rule type.
@@ -220,10 +241,11 @@ func (r *AnalyticsRuleResource) Update(ctx context.Context, req resource.UpdateR
 	}
 
 	rule := &client.AnalyticsRule{
-		Name:      data.Name.ValueString(),
-		Type:      data.Type.ValueString(),
-		EventType: data.EventType.ValueString(),
-		Params:    params,
+		Name:       data.Name.ValueString(),
+		Type:       data.Type.ValueString(),
+		Collection: data.Collection.ValueString(),
+		EventType:  data.EventType.ValueString(),
+		Params:     params,
 	}
 
 	_, err := r.client.UpsertAnalyticsRule(ctx, rule)

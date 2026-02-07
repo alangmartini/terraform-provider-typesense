@@ -7,14 +7,20 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 
 // ServerClient handles communication with the Typesense Server API
 type ServerClient struct {
-	httpClient *http.Client
-	apiKey     string
-	baseURL    string
+	httpClient    *http.Client
+	apiKey        string
+	baseURL       string
+	version       string
+	versionOnce   sync.Once
+	versionMajor  int
 }
 
 // ServerInfo contains debug/version information from the Typesense server
@@ -39,7 +45,7 @@ type SynonymItem struct {
 // CurationSet represents a Typesense curation set (v30.0+)
 type CurationSet struct {
 	Name       string         `json:"name"`
-	Curations  []CurationItem `json:"curations,omitempty"`
+	Curations  []CurationItem `json:"items,omitempty"` // API expects "items" field, not "curations"
 }
 
 // CurationItem represents a curation item within a curation set (v30.0+)
@@ -169,10 +175,11 @@ type Preset struct {
 
 // AnalyticsRule represents a Typesense analytics rule
 type AnalyticsRule struct {
-	Name      string         `json:"name,omitempty"`
-	Type      string         `json:"type"`
-	EventType string         `json:"event_type"`
-	Params    map[string]any `json:"params"`
+	Name       string         `json:"name,omitempty"`
+	Type       string         `json:"type"`
+	Collection string         `json:"collection"`
+	EventType  string         `json:"event_type"`
+	Params     map[string]any `json:"params"`
 }
 
 // CreateCollection creates a new collection
@@ -826,12 +833,28 @@ func (c *ServerClient) ListPresets(ctx context.Context) ([]Preset, error) {
 func (c *ServerClient) UpsertAnalyticsRule(ctx context.Context, rule *AnalyticsRule) (*AnalyticsRule, error) {
 	url := fmt.Sprintf("%s/analytics/rules/%s", c.baseURL, rule.Name)
 
-	// Send type, event_type, and params in the body (not name)
-	body, err := json.Marshal(map[string]any{
-		"type":       rule.Type,
-		"event_type": rule.EventType,
-		"params":     rule.Params,
-	})
+	var body []byte
+	var err error
+
+	majorVersion := c.GetMajorVersion(ctx)
+
+	if majorVersion >= 30 {
+		// v30+ format: top-level collection field, flat params with destination_collection
+		body, err = json.Marshal(map[string]any{
+			"type":       rule.Type,
+			"collection": rule.Collection,
+			"event_type": rule.EventType,
+			"params":     rule.Params,
+		})
+	} else {
+		// Pre-v30 format: nested source.collections and destination.collection in params
+		legacyParams := c.convertToLegacyParams(rule)
+		body, err = json.Marshal(map[string]any{
+			"type":       rule.Type,
+			"event_type": rule.EventType,
+			"params":     legacyParams,
+		})
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal analytics rule: %w", err)
 	}
@@ -860,6 +883,37 @@ func (c *ServerClient) UpsertAnalyticsRule(ctx context.Context, rule *AnalyticsR
 	}
 
 	return &result, nil
+}
+
+// convertToLegacyParams converts v30+ flat params format to pre-v30 nested format
+func (c *ServerClient) convertToLegacyParams(rule *AnalyticsRule) map[string]any {
+	legacyParams := make(map[string]any)
+
+	// Build source block with collections array
+	source := map[string]any{
+		"collections": []string{rule.Collection},
+	}
+
+	// Build destination block
+	destination := make(map[string]any)
+	if destColl, ok := rule.Params["destination_collection"].(string); ok {
+		destination["collection"] = destColl
+	}
+	if counterField, ok := rule.Params["counter_field"].(string); ok {
+		destination["counter_field"] = counterField
+	}
+
+	legacyParams["source"] = source
+	legacyParams["destination"] = destination
+
+	// Copy other params (limit, expand_query, weight, etc.)
+	for k, v := range rule.Params {
+		if k != "destination_collection" && k != "counter_field" {
+			legacyParams[k] = v
+		}
+	}
+
+	return legacyParams
 }
 
 // GetAnalyticsRule retrieves an analytics rule by name
@@ -1070,6 +1124,31 @@ func (c *ServerClient) GetServerInfo(ctx context.Context) (*ServerInfo, error) {
 	}
 
 	return &result, nil
+}
+
+// GetMajorVersion returns the major version of the Typesense server (cached after first call)
+func (c *ServerClient) GetMajorVersion(ctx context.Context) int {
+	c.versionOnce.Do(func() {
+		info, err := c.GetServerInfo(ctx)
+		if err != nil || info == nil {
+			// Default to latest format if we can't determine version
+			c.versionMajor = 30
+			return
+		}
+		c.version = info.Version
+		// Parse major version from string like "30.0" or "29.1.2"
+		parts := strings.Split(info.Version, ".")
+		if len(parts) > 0 {
+			major, err := strconv.Atoi(parts[0])
+			if err == nil {
+				c.versionMajor = major
+				return
+			}
+		}
+		// Default to latest format if parsing fails
+		c.versionMajor = 30
+	})
+	return c.versionMajor
 }
 
 // ListSynonymSets retrieves all synonym sets (Typesense v30.0+)

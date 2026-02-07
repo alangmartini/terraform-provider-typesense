@@ -182,9 +182,15 @@ func TestCurationSetJSONSerialization(t *testing.T) {
 		t.Error("Expected 'name' field in JSON output")
 	}
 
-	// Verify "curations" field exists (this is the correct field name for curation sets)
-	if _, ok := result["curations"]; !ok {
-		t.Error("Expected 'curations' field in JSON output")
+	// CRITICAL: Verify API expects "items" field, NOT "curations"
+	// This is the exact issue that caused "Missing or invalid 'items' field" error
+	if _, ok := result["items"]; !ok {
+		t.Error("Expected 'items' field in JSON output - Typesense v30 API requires 'items' not 'curations'")
+	}
+
+	// Verify "curations" is NOT used as the field name
+	if _, ok := result["curations"]; ok {
+		t.Error("'curations' field should not exist - API expects 'items'")
 	}
 }
 
@@ -659,8 +665,8 @@ func TestUpsertCurationSetHTTPPayload(t *testing.T) {
 
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"name":       "test-curation",
-			"curations": []interface{}{},
+			"name":  "test-curation",
+			"items": []interface{}{},
 		})
 	}))
 	defer server.Close()
@@ -689,9 +695,9 @@ func TestUpsertCurationSetHTTPPayload(t *testing.T) {
 		t.Fatalf("UpsertCurationSet failed: %v", err)
 	}
 
-	// Validate the payload
-	if _, ok := receivedPayload["curations"]; !ok {
-		t.Error("Request payload missing 'curations' field")
+	// Validate the payload - API expects "items" field, not "curations"
+	if _, ok := receivedPayload["items"]; !ok {
+		t.Error("Request payload missing 'items' field - Typesense v30 API requires 'items' not 'curations'")
 	}
 	if _, ok := receivedPayload["name"]; !ok {
 		t.Error("Request payload missing 'name' field")
@@ -1044,6 +1050,237 @@ func TestCollectionRoundTrip(t *testing.T) {
 	}
 	if len(decoded.Fields) != len(original.Fields) {
 		t.Errorf("Fields length mismatch: got %d, want %d", len(decoded.Fields), len(original.Fields))
+	}
+}
+
+// =============================================================================
+// Analytics Rule API Payload Tests
+// =============================================================================
+// These tests verify that analytics rules are formatted correctly for both
+// v30+ and pre-v30 Typesense API versions.
+
+// TestUpsertAnalyticsRuleHTTPPayload_V30 validates that analytics rules sent to
+// Typesense v30+ include the top-level 'collection' field. This test reproduces
+// the issue where missing 'collection' field caused "Collection is required" error.
+func TestUpsertAnalyticsRuleHTTPPayload_V30(t *testing.T) {
+	var receivedPayload map[string]interface{}
+
+	// Mock server that returns version 30.0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/debug" {
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"version": "30.0",
+				"state":   1,
+			})
+			return
+		}
+
+		if r.Method != http.MethodPut {
+			t.Errorf("Expected PUT method, got %s", r.Method)
+		}
+		if !strings.HasPrefix(r.URL.Path, "/analytics/rules/") {
+			t.Errorf("Expected path starting with /analytics/rules/, got %s", r.URL.Path)
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("Failed to read request body: %v", err)
+		}
+
+		if err := json.Unmarshal(body, &receivedPayload); err != nil {
+			t.Fatalf("Failed to parse request JSON: %v", err)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"name":       "test-rule",
+			"type":       "popular_queries",
+			"collection": "products",
+		})
+	}))
+	defer server.Close()
+
+	client := &ServerClient{
+		httpClient: http.DefaultClient,
+		apiKey:     "test-api-key",
+		baseURL:    server.URL,
+	}
+
+	rule := &AnalyticsRule{
+		Name:       "test-rule",
+		Type:       "popular_queries",
+		Collection: "products",
+		EventType:  "search",
+		Params: map[string]any{
+			"destination_collection": "product_queries",
+			"limit":                  1000,
+		},
+	}
+
+	_, err := client.UpsertAnalyticsRule(context.Background(), rule)
+	if err != nil {
+		t.Fatalf("UpsertAnalyticsRule failed: %v", err)
+	}
+
+	// CRITICAL: Verify 'collection' field is present at top level
+	// This is the exact issue that caused "Collection is required" error in v30+
+	if _, ok := receivedPayload["collection"]; !ok {
+		t.Error("Request payload missing 'collection' field - Typesense v30+ requires top-level 'collection'")
+	}
+	if receivedPayload["collection"] != "products" {
+		t.Errorf("Expected collection 'products', got %v", receivedPayload["collection"])
+	}
+
+	// Verify other required fields
+	if _, ok := receivedPayload["type"]; !ok {
+		t.Error("Request payload missing 'type' field")
+	}
+	if _, ok := receivedPayload["event_type"]; !ok {
+		t.Error("Request payload missing 'event_type' field")
+	}
+	if _, ok := receivedPayload["params"]; !ok {
+		t.Error("Request payload missing 'params' field")
+	}
+
+	// Verify params uses flat format (destination_collection, not nested destination.collection)
+	params, ok := receivedPayload["params"].(map[string]interface{})
+	if !ok {
+		t.Fatal("'params' is not an object")
+	}
+	if _, ok := params["destination_collection"]; !ok {
+		t.Error("Expected 'destination_collection' in params for v30+ format")
+	}
+}
+
+// TestUpsertAnalyticsRuleHTTPPayload_PreV30 validates that analytics rules sent to
+// pre-v30 Typesense use the nested source.collections format.
+func TestUpsertAnalyticsRuleHTTPPayload_PreV30(t *testing.T) {
+	var receivedPayload map[string]interface{}
+
+	// Mock server that returns version 29.0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/debug" {
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"version": "29.0",
+				"state":   1,
+			})
+			return
+		}
+
+		if r.Method != http.MethodPut {
+			t.Errorf("Expected PUT method, got %s", r.Method)
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("Failed to read request body: %v", err)
+		}
+
+		if err := json.Unmarshal(body, &receivedPayload); err != nil {
+			t.Fatalf("Failed to parse request JSON: %v", err)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"name": "test-rule",
+			"type": "popular_queries",
+		})
+	}))
+	defer server.Close()
+
+	client := &ServerClient{
+		httpClient: http.DefaultClient,
+		apiKey:     "test-api-key",
+		baseURL:    server.URL,
+	}
+
+	rule := &AnalyticsRule{
+		Name:       "test-rule",
+		Type:       "popular_queries",
+		Collection: "products",
+		EventType:  "search",
+		Params: map[string]any{
+			"destination_collection": "product_queries",
+			"limit":                  1000,
+		},
+	}
+
+	_, err := client.UpsertAnalyticsRule(context.Background(), rule)
+	if err != nil {
+		t.Fatalf("UpsertAnalyticsRule failed: %v", err)
+	}
+
+	// Verify pre-v30 format: NO top-level collection field
+	if _, ok := receivedPayload["collection"]; ok {
+		t.Error("Pre-v30 format should NOT have top-level 'collection' field")
+	}
+
+	// Verify nested source.collections format
+	params, ok := receivedPayload["params"].(map[string]interface{})
+	if !ok {
+		t.Fatal("'params' is not an object")
+	}
+
+	source, ok := params["source"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Pre-v30 format should have 'source' object in params")
+	}
+
+	collections, ok := source["collections"].([]interface{})
+	if !ok {
+		t.Fatal("Pre-v30 format should have 'collections' array in source")
+	}
+	if len(collections) != 1 || collections[0] != "products" {
+		t.Errorf("Expected collections ['products'], got %v", collections)
+	}
+
+	// Verify nested destination.collection format
+	destination, ok := params["destination"].(map[string]interface{})
+	if !ok {
+		t.Fatal("Pre-v30 format should have 'destination' object in params")
+	}
+	if destination["collection"] != "product_queries" {
+		t.Errorf("Expected destination.collection 'product_queries', got %v", destination["collection"])
+	}
+}
+
+// TestAnalyticsRuleJSONSerialization validates that AnalyticsRule struct
+// serializes correctly with the 'collection' field for v30+.
+func TestAnalyticsRuleJSONSerialization(t *testing.T) {
+	rule := AnalyticsRule{
+		Name:       "test-analytics",
+		Type:       "popular_queries",
+		Collection: "products",
+		EventType:  "search",
+		Params: map[string]any{
+			"destination_collection": "queries",
+			"limit":                  500,
+		},
+	}
+
+	data, err := json.Marshal(rule)
+	if err != nil {
+		t.Fatalf("Failed to marshal AnalyticsRule: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("Failed to unmarshal JSON: %v", err)
+	}
+
+	// Verify all expected fields are present
+	expectedFields := []string{"name", "type", "collection", "event_type", "params"}
+	for _, field := range expectedFields {
+		if _, ok := result[field]; !ok {
+			t.Errorf("Expected '%s' field in AnalyticsRule JSON", field)
+		}
+	}
+
+	// Verify collection field value
+	if result["collection"] != "products" {
+		t.Errorf("Expected collection 'products', got %v", result["collection"])
 	}
 }
 
