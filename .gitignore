@@ -25,6 +25,7 @@ testbed/fixtures/*.jsonl
 
 # Sensitive files
 target_cluster.txt
+.env
 
 # IDE
 .idea/
