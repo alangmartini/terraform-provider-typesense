@@ -70,3 +70,28 @@ When adding a new Terraform resource:
 - **Dev override caching**: After adding new resources, must rebuild binary before `terraform validate` picks up changes
 - **Sensitive variable transitivity**: Outputs using `count` based on sensitive vars inherit sensitivity; use `length(resource.name) > 0` pattern instead
 - **Optional resource pattern**: Use `count = var.x != "" ? 1 : 0` for conditionally created resources
+
+## Chinook Example Testing
+
+**Always test new features using the chinook example** against a local Typesense cluster before marking work complete:
+
+```bash
+make chinook-test     # Full test: start Typesense, apply chinook, verify, cleanup
+```
+
+For development iteration:
+```bash
+make start-typesense  # Start local cluster (if not running)
+make chinook-apply    # Apply chinook example only
+make chinook-destroy  # Destroy chinook resources
+```
+
+### Testing OpenAI-Dependent Features
+
+The chinook example includes NL Search Model and Conversation Model resources that require an OpenAI API key. To test these:
+
+1. Copy `.env.example` to `.env`
+2. Set `TEST_OPENAI_API_KEY` to your OpenAI API key
+3. Run `make chinook-test`
+
+Without the API key, these resources are skipped but all other chinook resources are tested.
