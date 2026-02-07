@@ -81,7 +81,7 @@ jobs:
     timeout-minutes: 30
     services:
       typesense:
-        image: typesense/typesense:29.0.rc30
+        image: typesense/typesense:30.0
         ports:
           - 8108:8108
         options: --tmpfs /data:rw
