@@ -60,8 +60,10 @@ resource "typesense_override" "acdc_redirect" {
     match = "exact"
   }
 
+  # Note: replace_query and remove_matched_tokens are mutually exclusive
+  # Must explicitly set remove_matched_tokens=false when using replace_query
   replace_query         = "AC/DC"
-  remove_matched_tokens = true
+  remove_matched_tokens = false
 }
 
 # Handle "beatles" search (common misspelling scenarios)
