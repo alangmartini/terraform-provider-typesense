@@ -284,3 +284,37 @@ output "curations" {
     }
   }
 }
+
+# =============================================================================
+# API KEYS
+# =============================================================================
+
+output "api_keys" {
+  description = "API keys configured for different access levels"
+  value = {
+    search_only = {
+      id          = typesense_api_key.search_only.id
+      description = typesense_api_key.search_only.description
+      collections = typesense_api_key.search_only.collections
+      actions     = typesense_api_key.search_only.actions
+    }
+    customer_admin = {
+      id          = typesense_api_key.customer_admin.id
+      description = typesense_api_key.customer_admin.description
+      collections = typesense_api_key.customer_admin.collections
+      actions     = typesense_api_key.customer_admin.actions
+    }
+    analytics_reader = {
+      id          = typesense_api_key.analytics_reader.id
+      description = typesense_api_key.analytics_reader.description
+      collections = typesense_api_key.analytics_reader.collections
+      actions     = typesense_api_key.analytics_reader.actions
+    }
+  }
+}
+
+output "search_api_key_value" {
+  description = "Search-only API key value (for client-side use)"
+  value       = typesense_api_key.search_only.value
+  sensitive   = true
+}
