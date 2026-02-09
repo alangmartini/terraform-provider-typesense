@@ -244,9 +244,10 @@ output "analytics_rules" {
     nohits_queries = {
       tracks = typesense_analytics_rule.track_nohits.name
     }
-    counters = {
-      track_popularity = typesense_analytics_rule.track_popularity.name
-    }
+    # TODO: Re-enable when counter rules are fixed
+    # counters = {
+    #   track_popularity = typesense_analytics_rule.track_popularity.name
+    # }
   }
 }
 

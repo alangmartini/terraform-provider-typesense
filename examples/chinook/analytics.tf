@@ -105,15 +105,18 @@ resource "typesense_analytics_rule" "track_nohits" {
 # Track user interactions to build popularity scores
 # =============================================================================
 
-# Track track popularity based on clicks and plays
-resource "typesense_analytics_rule" "track_popularity" {
-  name       = "track-popularity-counter"
-  type       = "counter"
-  collection = typesense_collection.tracks.name
-  event_type = "click"
-  params = jsonencode({
-    destination_collection = typesense_collection.tracks.name
-    counter_field          = "popularity_score"
-    weight                 = 1
-  })
-}
+# TODO: Counter rules require additional events configuration in Typesense 29.0+
+# Re-enable when the params structure is updated to match the new API format.
+# See: https://typesense.org/docs/29.0/api/analytics-query-suggestions.html
+#
+# resource "typesense_analytics_rule" "track_popularity" {
+#   name       = "track-popularity-counter"
+#   type       = "counter"
+#   collection = typesense_collection.tracks.name
+#   event_type = "click"
+#   params = jsonencode({
+#     destination_collection = typesense_collection.tracks.name
+#     counter_field          = "popularity_score"
+#     weight                 = 1
+#   })
+# }
