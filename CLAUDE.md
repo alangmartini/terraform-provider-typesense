@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Always create a new branch when starting work** on a feature or fix. Use descriptive branch names that reflect the work being done.
 - **Commit each atomic change** separately. Each commit should represent a single logical change that can stand on its own.
+- **Always create a PR at the end of implementations.** After completing a feature or fix, create a pull request to merge the changes into main.
 
 ## Test-Driven Development (TDD)
 
