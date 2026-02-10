@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Always create a new branch when starting work** on a feature or fix. Use descriptive branch names that reflect the work being done.
 - **Commit each atomic change** separately. Each commit should represent a single logical change that can stand on its own.
+- **Always create a PR at the end of implementations.** After completing a feature or fix, create a pull request to merge the changes into main.
 
 ## Test-Driven Development (TDD)
 
@@ -18,6 +19,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This ensures we understand the root cause and have regression coverage.
 
 ## Testing Requirements
+
+### Chinook Example as Primary Acceptance Tests
+
+**The `examples/chinook/` directory serves as the primary acceptance test suite for this provider.** It exercises all supported resources in a realistic, integrated scenario:
+
+- **All new resources MUST be added to chinook** before considering them complete
+- **Run `make chinook-test` as the primary verification** after any changes
+- The chinook example tests real-world patterns with resource dependencies
+
+**Currently tested resources in chinook:**
+- `typesense_collection` - 7 collections with complex schemas
+- `typesense_collection_alias` - 6 aliases
+- `typesense_synonym` - 15 synonym rules
+- `typesense_override` - 9 curations
+- `typesense_stopwords_set` - 3 stopword sets
+- `typesense_preset` - 11 search presets
+- `typesense_analytics_rule` - 3+ analytics rules
+- `typesense_api_key` - 3 keys with different permission levels
+- `typesense_nl_search_model` - (optional, requires OpenAI key)
+- `typesense_conversation_model` - (optional, requires OpenAI key)
+
+**Not tested in chinook** (cluster-level resources for multi-node setups):
+- `typesense_cluster` - N/A for local testing
+- `typesense_cluster_config_change` - N/A for local testing
+
+### E2E Testbed
+
+For **data migration and edge case testing**, use the E2E testbed:
 
 - **Run E2E tests after implementing new features.** After completing any new feature or significant bug fix, run the E2E testbed to verify the provider still works correctly:
   ```bash
@@ -63,7 +92,8 @@ When adding a new Terraform resource:
 2. Create resource file in `internal/resources/{resource_name}.go`
 3. Register in `internal/provider/provider.go` Resources() function
 4. Rebuild binary: `go build -o terraform-provider-typesense .`
-5. Run `terraform validate` in examples to verify schema is recognized
+5. **Add the resource to `examples/chinook/`** with a realistic example
+6. Run `make chinook-test` to verify the resource works in an integrated scenario
 
 ## Terraform Development Notes
 
@@ -73,7 +103,7 @@ When adding a new Terraform resource:
 
 ## Chinook Example Testing
 
-**Always test new features using the chinook example** against a local Typesense cluster before marking work complete:
+**The chinook example is the primary acceptance test suite.** Always run it after any changes:
 
 ```bash
 make chinook-test     # Full test: start Typesense, apply chinook, verify, cleanup
@@ -85,6 +115,14 @@ make start-typesense  # Start local cluster (if not running)
 make chinook-apply    # Apply chinook example only
 make chinook-destroy  # Destroy chinook resources
 ```
+
+### Adding New Resources to Chinook
+
+When implementing a new resource:
+1. Add the resource implementation
+2. **Add a realistic example to `examples/chinook/`** that demonstrates the resource
+3. Add corresponding outputs to `examples/chinook/outputs.tf`
+4. Run `make chinook-test` to verify integration
 
 ### Testing OpenAI-Dependent Features
 
