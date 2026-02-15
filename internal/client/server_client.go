@@ -1734,7 +1734,7 @@ func (c *ServerClient) UpsertStemmingDictionary(ctx context.Context, id string, 
 	}
 
 	// Import returns each line's result; read to completion
-	io.ReadAll(resp.Body)
+	_, _ = io.ReadAll(resp.Body)
 
 	// Fetch the dictionary back to get the canonical response
 	return c.GetStemmingDictionary(ctx, id)
