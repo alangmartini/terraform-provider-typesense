@@ -237,16 +237,37 @@ func (r *OverrideResource) Create(ctx context.Context, req resource.CreateReques
 		// v30+: Use curation sets API
 		err := r.createOverrideV30(ctx, collection, override)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create override: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to create override using v30+ curation sets API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
+			return
+		}
+	} else if r.featureChecker.SupportsFeature(version.FeaturePerCollectionOverrides) || r.featureChecker.GetVersion() == nil {
+		// v29 and earlier (or unknown version): Use per-collection overrides API
+		_, err := r.client.CreateOverride(ctx, collection, override)
+		if err != nil {
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to create override using per-collection overrides API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s). Note: Per-collection overrides were removed in v30+. Use curation sets in v30+.", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
 	} else {
-		// v29 and earlier: Use per-collection overrides API
-		_, err := r.client.CreateOverride(ctx, collection, override)
-		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create override: %s", err))
-			return
-		}
+		serverVer := r.featureChecker.GetVersion()
+		resp.Diagnostics.AddError(
+			"Unsupported Typesense Version for Overrides",
+			fmt.Sprintf(
+				"Your Typesense server (v%s) does not support any known overrides API. "+
+					"Per-collection overrides require v29 or earlier, curation sets require v30+.",
+				serverVer.String(),
+			),
+		)
+		return
 	}
 
 	data.ID = types.StringValue(fmt.Sprintf("%s/%s", collection, override.ID))
@@ -274,14 +295,24 @@ func (r *OverrideResource) Read(ctx context.Context, req resource.ReadRequest, r
 		// v30+: Use curation sets API
 		override, err = r.getOverrideV30(ctx, collection, name)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read override: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to read override using v30+ curation sets API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
 	} else {
-		// v29 and earlier: Use per-collection overrides API
+		// v29 and earlier (or unknown version): Use per-collection overrides API
 		override, err = r.client.GetOverride(ctx, collection, name)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read override: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to read override using per-collection overrides API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
 	}
@@ -318,14 +349,24 @@ func (r *OverrideResource) Update(ctx context.Context, req resource.UpdateReques
 		// v30+: Use curation sets API (same as create - upsert behavior)
 		err := r.createOverrideV30(ctx, collection, override)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update override: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to update override using v30+ curation sets API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
 	} else {
-		// v29 and earlier: Use per-collection overrides API
+		// v29 and earlier (or unknown version): Use per-collection overrides API
 		_, err := r.client.CreateOverride(ctx, collection, override)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update override: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to update override using per-collection overrides API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
 	}
@@ -350,14 +391,24 @@ func (r *OverrideResource) Delete(ctx context.Context, req resource.DeleteReques
 		// v30+: Use curation sets API
 		err := r.deleteOverrideV30(ctx, collection, name)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete override: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to delete override using v30+ curation sets API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
 	} else {
-		// v29 and earlier: Use per-collection overrides API
+		// v29 and earlier (or unknown version): Use per-collection overrides API
 		err := r.client.DeleteOverride(ctx, collection, name)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete override: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to delete override using per-collection overrides API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
 	}

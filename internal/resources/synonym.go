@@ -135,11 +135,16 @@ func (r *SynonymResource) Create(ctx context.Context, req resource.CreateRequest
 		// v30+: Use synonym sets API
 		err := r.createSynonymV30(ctx, collection, name, root, synonyms)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create synonym: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to create synonym using v30+ synonym sets API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
-	} else {
-		// v29 and earlier: Use per-collection synonyms API
+	} else if r.featureChecker.SupportsFeature(version.FeaturePerCollectionSynonyms) || r.featureChecker.GetVersion() == nil {
+		// v29 and earlier (or unknown version): Use per-collection synonyms API
 		synonym := &client.Synonym{
 			ID:       name,
 			Synonyms: synonyms,
@@ -148,9 +153,25 @@ func (r *SynonymResource) Create(ctx context.Context, req resource.CreateRequest
 
 		_, err := r.client.CreateSynonym(ctx, collection, synonym)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create synonym: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to create synonym using per-collection synonyms API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s). Note: Per-collection synonyms were removed in v30+. Use synonym sets in v30+.", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
+	} else {
+		serverVer := r.featureChecker.GetVersion()
+		resp.Diagnostics.AddError(
+			"Unsupported Typesense Version for Synonyms",
+			fmt.Sprintf(
+				"Your Typesense server (v%s) does not support any known synonym API. "+
+					"Per-collection synonyms require v29 or earlier, synonym sets require v30+.",
+				serverVer.String(),
+			),
+		)
+		return
 	}
 
 	data.ID = types.StringValue(fmt.Sprintf("%s/%s", collection, name))
@@ -179,7 +200,12 @@ func (r *SynonymResource) Read(ctx context.Context, req resource.ReadRequest, re
 		// v30+: Use synonym sets API
 		synItem, err := r.getSynonymV30(ctx, collection, name)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read synonym: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to read synonym using v30+ synonym sets API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
 		if synItem != nil {
@@ -188,10 +214,15 @@ func (r *SynonymResource) Read(ctx context.Context, req resource.ReadRequest, re
 			root = synItem.Root
 		}
 	} else {
-		// v29 and earlier: Use per-collection synonyms API
+		// v29 and earlier (or unknown version): Use per-collection synonyms API
 		synonym, err := r.client.GetSynonym(ctx, collection, name)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read synonym: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to read synonym using per-collection synonyms API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
 		if synonym != nil {
@@ -249,11 +280,16 @@ func (r *SynonymResource) Update(ctx context.Context, req resource.UpdateRequest
 		// v30+: Use synonym sets API (same as create - upsert behavior)
 		err := r.createSynonymV30(ctx, collection, name, root, synonyms)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update synonym: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to update synonym using v30+ synonym sets API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
 	} else {
-		// v29 and earlier: Use per-collection synonyms API
+		// v29 and earlier (or unknown version): Use per-collection synonyms API
 		synonym := &client.Synonym{
 			ID:       name,
 			Synonyms: synonyms,
@@ -262,7 +298,12 @@ func (r *SynonymResource) Update(ctx context.Context, req resource.UpdateRequest
 
 		_, err := r.client.CreateSynonym(ctx, collection, synonym)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update synonym: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to update synonym using per-collection synonyms API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
 	}
@@ -287,14 +328,24 @@ func (r *SynonymResource) Delete(ctx context.Context, req resource.DeleteRequest
 		// v30+: Use synonym sets API
 		err := r.deleteSynonymV30(ctx, collection, name)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete synonym: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to delete synonym using v30+ synonym sets API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
 	} else {
-		// v29 and earlier: Use per-collection synonyms API
+		// v29 and earlier (or unknown version): Use per-collection synonyms API
 		err := r.client.DeleteSynonym(ctx, collection, name)
 		if err != nil {
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete synonym: %s", err))
+			serverVer := r.featureChecker.GetVersion()
+			detail := fmt.Sprintf("Unable to delete synonym using per-collection synonyms API: %s", err)
+			if serverVer != nil {
+				detail += fmt.Sprintf(" (server version: v%s)", serverVer.String())
+			}
+			resp.Diagnostics.AddError("Client Error", detail)
 			return
 		}
 	}
