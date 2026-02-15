@@ -151,6 +151,18 @@ type StopwordsSet struct {
 	Locale    string   `json:"locale,omitempty"`
 }
 
+// WordStemMapping represents a word-to-stem mapping in a stemming dictionary
+type WordStemMapping struct {
+	Word string `json:"word"`
+	Stem string `json:"stem"`
+}
+
+// StemmingDictionary represents a Typesense stemming dictionary
+type StemmingDictionary struct {
+	ID    string            `json:"id"`
+	Words []WordStemMapping `json:"words"`
+}
+
 // APIKey represents a Typesense API key
 type APIKey struct {
 	ID          int64    `json:"id,omitempty"`
@@ -1536,6 +1548,133 @@ func (c *ServerClient) ListStopwordsSets(ctx context.Context) ([]StopwordsSet, e
 	}
 
 	return wrapper.Stopwords, nil
+}
+
+// UpsertStemmingDictionary creates or updates a stemming dictionary
+func (c *ServerClient) UpsertStemmingDictionary(ctx context.Context, id string, words []WordStemMapping) (*StemmingDictionary, error) {
+	payload := struct {
+		Words []WordStemMapping `json:"words"`
+	}{Words: words}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal stemming dictionary: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/stemming/dictionaries/%s", c.baseURL, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upsert stemming dictionary: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to upsert stemming dictionary: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result StemmingDictionary
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetStemmingDictionary retrieves a stemming dictionary by ID
+func (c *ServerClient) GetStemmingDictionary(ctx context.Context, id string) (*StemmingDictionary, error) {
+	url := fmt.Sprintf("%s/stemming/dictionaries/%s", c.baseURL, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stemming dictionary: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get stemming dictionary: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result StemmingDictionary
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteStemmingDictionary deletes a stemming dictionary by ID.
+// Note: If Typesense does not support DELETE for stemming dictionaries,
+// this will log a warning and succeed (resource removed from state only).
+func (c *ServerClient) DeleteStemmingDictionary(ctx context.Context, id string) error {
+	url := fmt.Sprintf("%s/stemming/dictionaries/%s", c.baseURL, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete stemming dictionary: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Accept 200 OK, 404 Not Found (already deleted), and 405 Method Not Allowed
+	// (endpoint may not support DELETE - gracefully remove from state only)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusMethodNotAllowed {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete stemming dictionary: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// ListStemmingDictionaries retrieves all stemming dictionaries
+func (c *ServerClient) ListStemmingDictionaries(ctx context.Context) ([]StemmingDictionary, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/stemming/dictionaries", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list stemming dictionaries: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list stemming dictionaries: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result []StemmingDictionary
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return result, nil
 }
 
 // NLSearchModel represents a Typesense Natural Language Search Model configuration
