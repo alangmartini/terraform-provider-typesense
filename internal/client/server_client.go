@@ -32,7 +32,7 @@ type ServerInfo struct {
 // SynonymSet represents a Typesense synonym set (v30.0+)
 type SynonymSet struct {
 	Name     string        `json:"name"`
-	Synonyms []SynonymItem `json:"items,omitempty"` // API expects "items" field containing array of synonym rules
+	Synonyms []SynonymItem `json:"items"` // API expects "items" field containing array of synonym rules
 }
 
 // SynonymItem represents a synonym item within a synonym set (v30.0+)
@@ -186,7 +186,7 @@ type StopwordsSet struct {
 // WordStemMapping represents a word-to-stem mapping in a stemming dictionary
 type WordStemMapping struct {
 	Word string `json:"word"`
-	Stem string `json:"stem"`
+	Stem string `json:"root"`
 }
 
 // StemmingDictionary represents a Typesense stemming dictionary
@@ -1319,6 +1319,121 @@ func (c *ServerClient) DeleteSynonymSet(ctx context.Context, name string) error 
 	return nil
 }
 
+// EnsureSynonymSetExists creates a synonym set if it doesn't already exist (Typesense v30.0+).
+// Uses GET to check existence, and only creates with empty items if the set is missing.
+func (c *ServerClient) EnsureSynonymSetExists(ctx context.Context, name string) error {
+	existing, err := c.GetSynonymSet(ctx, name)
+	if err != nil {
+		return fmt.Errorf("failed to check synonym set: %w", err)
+	}
+
+	if existing == nil {
+		// Create with empty items - this is safe because the set doesn't exist yet
+		emptySet := &SynonymSet{Name: name, Synonyms: []SynonymItem{}}
+		_, err = c.UpsertSynonymSet(ctx, emptySet)
+		if err != nil {
+			return fmt.Errorf("failed to create synonym set: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// UpsertSynonymSetItem creates or updates a single synonym item within a set (Typesense v30.0+)
+func (c *ServerClient) UpsertSynonymSetItem(ctx context.Context, setName string, item *SynonymItem) (*SynonymItem, error) {
+	body, err := json.Marshal(item)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal synonym item: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/synonym_sets/%s/items/%s", c.baseURL, setName, item.ID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upsert synonym item: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("synonym set not found")
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to upsert synonym item: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result SynonymItem
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetSynonymSetItem retrieves a single synonym item from a set (Typesense v30.0+)
+func (c *ServerClient) GetSynonymSetItem(ctx context.Context, setName, itemID string) (*SynonymItem, error) {
+	url := fmt.Sprintf("%s/synonym_sets/%s/items/%s", c.baseURL, setName, itemID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get synonym item: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get synonym item: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result SynonymItem
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteSynonymSetItem deletes a single synonym item from a set (Typesense v30.0+)
+func (c *ServerClient) DeleteSynonymSetItem(ctx context.Context, setName, itemID string) error {
+	url := fmt.Sprintf("%s/synonym_sets/%s/items/%s", c.baseURL, setName, itemID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete synonym item: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete synonym item: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
 // ListCurationSets retrieves all curation sets (Typesense v30.0+)
 func (c *ServerClient) ListCurationSets(ctx context.Context) ([]CurationSet, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/curation_sets", nil)
@@ -1582,24 +1697,30 @@ func (c *ServerClient) ListStopwordsSets(ctx context.Context) ([]StopwordsSet, e
 	return wrapper.Stopwords, nil
 }
 
-// UpsertStemmingDictionary creates or updates a stemming dictionary
+// UpsertStemmingDictionary creates or updates a stemming dictionary using the import endpoint.
+// The API uses POST /stemming/dictionaries/import?id={id} with JSONL body format.
 func (c *ServerClient) UpsertStemmingDictionary(ctx context.Context, id string, words []WordStemMapping) (*StemmingDictionary, error) {
-	payload := struct {
-		Words []WordStemMapping `json:"words"`
-	}{Words: words}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal stemming dictionary: %w", err)
+	// Build JSONL body (one JSON object per line)
+	var buf bytes.Buffer
+	for i, w := range words {
+		line, err := json.Marshal(w)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal word mapping: %w", err)
+		}
+		buf.Write(line)
+		if i < len(words)-1 {
+			buf.WriteByte('\n')
+		}
 	}
 
-	url := fmt.Sprintf("%s/stemming/dictionaries/%s", c.baseURL, id)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	url := fmt.Sprintf("%s/stemming/dictionaries/import?id=%s", c.baseURL, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &buf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	c.setHeaders(req)
+	req.Header.Set("Content-Type", "text/plain")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -1612,12 +1733,11 @@ func (c *ServerClient) UpsertStemmingDictionary(ctx context.Context, id string, 
 		return nil, fmt.Errorf("failed to upsert stemming dictionary: status %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	var result StemmingDictionary
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
+	// Import returns each line's result; read to completion
+	io.ReadAll(resp.Body)
 
-	return &result, nil
+	// Fetch the dictionary back to get the canonical response
+	return c.GetStemmingDictionary(ctx, id)
 }
 
 // GetStemmingDictionary retrieves a stemming dictionary by ID
