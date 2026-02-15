@@ -126,14 +126,14 @@ func (r *StemmingDictionaryResource) Create(ctx context.Context, req resource.Cr
 	}
 
 	dictID := data.DictionaryID.ValueString()
-	created, err := r.client.UpsertStemmingDictionary(ctx, dictID, words)
+	_, err := r.client.UpsertStemmingDictionary(ctx, dictID, words)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create stemming dictionary: %s", err))
 		return
 	}
 
-	data.ID = types.StringValue(created.ID)
-	data.Words = wordsToListValue(ctx, created.Words)
+	data.ID = types.StringValue(dictID)
+	// Keep the planned word order (API may return in a different order)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -158,7 +158,35 @@ func (r *StemmingDictionaryResource) Read(ctx context.Context, req resource.Read
 		return
 	}
 
-	data.Words = wordsToListValue(ctx, dict.Words)
+	// Reconcile API response with state order to avoid spurious diffs
+	// The API may return words in a different order than the user specified
+	stateWords, diags := extractWords(ctx, data.Words)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Build lookup of API words by word key
+	apiWordMap := make(map[string]string, len(dict.Words))
+	for _, w := range dict.Words {
+		apiWordMap[w.Word] = w.Stem
+	}
+
+	// Check if state words match API words (same content, possibly different order)
+	stateMatchesAPI := len(stateWords) == len(dict.Words)
+	if stateMatchesAPI {
+		for _, sw := range stateWords {
+			if apiStem, ok := apiWordMap[sw.Word]; !ok || apiStem != sw.Stem {
+				stateMatchesAPI = false
+				break
+			}
+		}
+	}
+
+	// Only update words if content actually changed (not just reordered)
+	if !stateMatchesAPI {
+		data.Words = wordsToListValue(ctx, dict.Words)
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -179,13 +207,13 @@ func (r *StemmingDictionaryResource) Update(ctx context.Context, req resource.Up
 	}
 
 	dictID := data.DictionaryID.ValueString()
-	updated, err := r.client.UpsertStemmingDictionary(ctx, dictID, words)
+	_, err := r.client.UpsertStemmingDictionary(ctx, dictID, words)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update stemming dictionary: %s", err))
 		return
 	}
 
-	data.Words = wordsToListValue(ctx, updated.Words)
+	// Keep the planned word order (API may return in a different order)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
