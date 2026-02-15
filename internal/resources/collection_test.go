@@ -466,6 +466,11 @@ resource "typesense_collection" "test" {
   field {
     name = "title"
     type = "string"
+  }
+
+  field {
+    name = "description"
+    type = "string"
     stem = true
   }
 
@@ -477,9 +482,11 @@ resource "typesense_collection" "test" {
 }
 `, rName),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("typesense_collection.test", "field.#", "3"),
-					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.name", "price"),
-					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.range_index", "true"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.#", "4"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.name", "description"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.stem", "true"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.3.name", "price"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.3.range_index", "true"),
 				),
 			},
 		},

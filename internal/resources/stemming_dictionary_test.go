@@ -99,14 +99,10 @@ func testAccStemmingDictionaryConfig_basic(name string) string {
 resource "typesense_stemming_dictionary" "test" {
   dictionary_id = %[1]q
 
-  words {
-    word = "running"
-    stem = "run"
-  }
-  words {
-    word = "jumping"
-    stem = "jump"
-  }
+  words = [
+    { word = "running", stem = "run" },
+    { word = "jumping", stem = "jump" },
+  ]
 }
 `, name)
 }
@@ -116,18 +112,11 @@ func testAccStemmingDictionaryConfig_updated(name string) string {
 resource "typesense_stemming_dictionary" "test" {
   dictionary_id = %[1]q
 
-  words {
-    word = "running"
-    stem = "run"
-  }
-  words {
-    word = "jumping"
-    stem = "jump"
-  }
-  words {
-    word = "better"
-    stem = "good"
-  }
+  words = [
+    { word = "running", stem = "run" },
+    { word = "jumping", stem = "jump" },
+    { word = "better", stem = "good" },
+  ]
 }
 `, name)
 }
@@ -137,22 +126,12 @@ func testAccStemmingDictionaryConfig_multipleWords(name string) string {
 resource "typesense_stemming_dictionary" "test" {
   dictionary_id = %[1]q
 
-  words {
-    word = "guitars"
-    stem = "guitar"
-  }
-  words {
-    word = "drumming"
-    stem = "drum"
-  }
-  words {
-    word = "singing"
-    stem = "sing"
-  }
-  words {
-    word = "recordings"
-    stem = "recording"
-  }
+  words = [
+    { word = "guitars", stem = "guitar" },
+    { word = "drumming", stem = "drum" },
+    { word = "singing", stem = "sing" },
+    { word = "recordings", stem = "recording" },
+  ]
 }
 `, name)
 }

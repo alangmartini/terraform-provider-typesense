@@ -2,6 +2,26 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Task Approach: Goal-First, Then Steps
+
+Before starting any task, follow this two-phase approach:
+
+### 1. Define the Goal (What do we want?)
+
+State the desired outcome clearly and concisely before writing any code. This means:
+- **Describe the end state** — what does "done" look like?
+- **Identify acceptance criteria** — how will we know it works?
+- **Call out constraints** — what must we avoid breaking or changing?
+
+### 2. Delineate the Steps (How do we get there?)
+
+Once the goal is clear, break the work into an ordered list of concrete steps:
+- Each step should be small enough to verify independently
+- Steps should follow a logical dependency order (what must happen first?)
+- Flag any steps that carry risk or need user input before proceeding
+
+**Apply this to every task** — features, bug fixes, refactors, and investigations alike. When the goal is ambiguous, ask the user to clarify before planning steps. When the steps reveal the goal was incomplete, revisit the goal definition.
+
 ## Git Workflow
 
 - **Always create a new branch when starting work** on a feature or fix. Use descriptive branch names that reflect the work being done.

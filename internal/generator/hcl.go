@@ -98,8 +98,8 @@ func generateCollectionBlock(c *client.Collection, resourceName string) *hclwrit
 		if field.Reference != "" {
 			fieldBody.SetAttributeValue("reference", cty.StringVal(field.Reference))
 		}
-		if field.AsyncReference != "" {
-			fieldBody.SetAttributeValue("async_reference", cty.StringVal(field.AsyncReference))
+		if field.AsyncReference != nil && *field.AsyncReference {
+			fieldBody.SetAttributeValue("async_reference", cty.BoolVal(true))
 		}
 		if field.Stem != nil && *field.Stem {
 			fieldBody.SetAttributeValue("stem", cty.BoolVal(true))
@@ -154,11 +154,9 @@ func generateCollectionBlock(c *client.Collection, resourceName string) *hclwrit
 		}
 	}
 
-	// Collection-level metadata
-	if c.Metadata != nil {
-		// Note: metadata is stored as a JSON string in HCL
-		// For generated HCL, we skip metadata since it's complex JSON
-	}
+	// Note: metadata is stored as a JSON string in HCL
+	// For generated HCL, we skip metadata since it's complex JSON
+
 	if c.VoiceQueryModel != "" {
 		body.SetAttributeValue("voice_query_model", cty.StringVal(c.VoiceQueryModel))
 	}

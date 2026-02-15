@@ -195,7 +195,7 @@ func TestCurationSetJSONSerialization(t *testing.T) {
 }
 
 // TestEmptySynonymSetSerialization verifies that an empty synonym set
-// doesn't include the "items" field when omitempty is in effect.
+// always includes the "items" field (required by the Typesense API).
 func TestEmptySynonymSetSerialization(t *testing.T) {
 	synonymSet := SynonymSet{
 		Name:     "empty-set",
@@ -212,9 +212,9 @@ func TestEmptySynonymSetSerialization(t *testing.T) {
 		t.Fatalf("Failed to unmarshal JSON: %v", err)
 	}
 
-	// With omitempty, the "items" field should not be present when empty
-	if _, ok := result["items"]; ok {
-		t.Error("Expected 'items' field to be omitted when empty (omitempty)")
+	// The "items" field must always be present (Typesense returns 400 without it)
+	if _, ok := result["items"]; !ok {
+		t.Error("Expected 'items' field to be present even when empty (required by Typesense API)")
 	}
 }
 

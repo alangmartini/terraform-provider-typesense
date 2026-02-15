@@ -1,5 +1,5 @@
 .PHONY: test test-acc test-acc-ci test-consistency test-conversation-model \
-	start-typesense stop-typesense build clean \
+	start-typesense stop-typesense build clean wsl-keepalive \
 	testbed-up testbed-down testbed-seed testbed-e2e testbed-verify testbed-clean \
 	chinook-apply chinook-destroy chinook-test
 
@@ -9,6 +9,27 @@ PORT := 8108
 CONTAINER_NAME := typesense-test
 TYPESENSE_HOST := localhost
 TYPESENSE_PROTOCOL := http
+
+# Docker command: use WSL docker on Windows, native docker elsewhere
+UNAME_S := $(shell uname -s 2>/dev/null || echo Windows)
+ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
+  export MSYS_NO_PATHCONV := 1
+  DOCKER := wsl docker
+  DOCKER_COMPOSE := wsl docker compose
+  # Convert Git Bash path (/c/Users/...) to WSL path (/mnt/c/Users/...)
+  WSL_PWD := $(shell echo '$(PWD)' | sed 's|^/\([a-z]\)/|/mnt/\1/|')
+  # On Windows/WSL, run 'make wsl-keepalive' in a separate terminal first
+else ifeq ($(findstring MSYS,$(UNAME_S)),MSYS)
+  export MSYS_NO_PATHCONV := 1
+  DOCKER := wsl docker
+  DOCKER_COMPOSE := wsl docker compose
+  WSL_PWD := $(shell echo '$(PWD)' | sed 's|^/\([a-z]\)/|/mnt/\1/|')
+  # On Windows/WSL, run 'make wsl-keepalive' in a separate terminal first
+else
+  DOCKER := docker
+  DOCKER_COMPOSE := docker compose
+  WSL_PWD := $(PWD)
+endif
 
 # Chinook example configuration
 CHINOOK_DIR := $(PWD)/examples/chinook
@@ -29,14 +50,13 @@ test:
 # Start local Typesense container for development
 start-typesense:
 	@echo "Setting up local Typesense instance..."
-	@docker stop $(CONTAINER_NAME) 2>/dev/null || true
-	@docker rm $(CONTAINER_NAME) 2>/dev/null || true
-	@rm -rf "$(PWD)/typesense-test-data"
-	@mkdir -p "$(PWD)/typesense-test-data"
+	@$(DOCKER) stop $(CONTAINER_NAME) 2>/dev/null || true
+	@$(DOCKER) rm $(CONTAINER_NAME) 2>/dev/null || true
+	@$(DOCKER) volume rm typesense-test-data 2>/dev/null || true
 	@echo "Starting Typesense container..."
-	@docker run -d -p $(PORT):$(PORT) --name $(CONTAINER_NAME) \
-		-v "$(PWD)/typesense-test-data:/data" \
-		typesense/typesense:29.0.rc30 \
+	@$(DOCKER) run -d -p $(PORT):$(PORT) --name $(CONTAINER_NAME) \
+		-v typesense-test-data:/data \
+		typesense/typesense:30.1 \
 		--data-dir /data \
 		--api-key=$(TYPESENSE_API_KEY) \
 		--enable-cors
@@ -58,10 +78,9 @@ start-typesense:
 # Stop and remove Typesense container
 stop-typesense:
 	@echo "Stopping and removing Typesense test container..."
-	@docker stop $(CONTAINER_NAME) 2>/dev/null || true
-	@docker rm $(CONTAINER_NAME) 2>/dev/null || true
-	@echo "Removing test data directory..."
-	@rm -rf "$(PWD)/typesense-test-data"
+	@$(DOCKER) stop $(CONTAINER_NAME) 2>/dev/null || true
+	@$(DOCKER) rm $(CONTAINER_NAME) 2>/dev/null || true
+	@$(DOCKER) volume rm typesense-test-data 2>/dev/null || true
 	@echo "✓ Cleanup complete!"
 
 # Run acceptance tests (starts Typesense, runs tests, cleans up)
@@ -137,6 +156,12 @@ clean:
 	@rm -rf typesense-test-data
 	@echo "✓ Clean complete!"
 
+# Keep WSL VM alive (Windows only - run in a separate terminal before Docker targets)
+# Windows shuts down WSL2 VM after ~10s of idle, killing Docker containers.
+wsl-keepalive:
+	@echo "Keeping WSL alive (Ctrl+C to stop)..."
+	wsl sleep infinity
+
 # ==============================================================================
 # E2E Testbed Targets
 # ==============================================================================
@@ -148,7 +173,7 @@ TESTBED_COMPOSE := $(TESTBED_DIR)/docker-compose.yml
 # Start both source and target Typesense clusters
 testbed-up:
 	@echo "Starting E2E testbed clusters..."
-	@docker compose -f $(TESTBED_COMPOSE) up -d
+	@$(DOCKER_COMPOSE) -f $(TESTBED_COMPOSE) up -d
 	@echo "Waiting for clusters to be healthy..."
 	@until curl -sf http://localhost:8108/health > /dev/null 2>&1; do sleep 2; done
 	@until curl -sf http://localhost:8109/health > /dev/null 2>&1; do sleep 2; done
@@ -160,7 +185,7 @@ testbed-up:
 # Stop and remove testbed clusters with volumes
 testbed-down:
 	@echo "Stopping E2E testbed clusters..."
-	@docker compose -f $(TESTBED_COMPOSE) down -v
+	@$(DOCKER_COMPOSE) -f $(TESTBED_COMPOSE) down -v
 	@echo "✓ Testbed stopped and cleaned!"
 
 # Seed the source cluster with test fixtures
@@ -181,7 +206,7 @@ testbed-verify:
 # Clean all testbed data (containers, volumes, exports)
 testbed-clean:
 	@echo "Cleaning all testbed data..."
-	@docker compose -f $(TESTBED_COMPOSE) down -v 2>/dev/null || true
+	@$(DOCKER_COMPOSE) -f $(TESTBED_COMPOSE) down -v 2>/dev/null || true
 	@rm -rf $(TESTBED_DIR)/export
 	@echo "✓ Testbed cleaned!"
 

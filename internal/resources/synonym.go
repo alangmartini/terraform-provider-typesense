@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
@@ -15,6 +16,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+// synonymSetMu serializes synonym set creation to prevent race conditions
+// where concurrent creates could overwrite each other's items via set-level PUT.
+var synonymSetMu sync.Map // map[string]*sync.Mutex
 
 var _ resource.Resource = &SynonymResource{}
 var _ resource.ResourceWithImportState = &SynonymResource{}
@@ -369,52 +374,40 @@ func (r *SynonymResource) ImportState(ctx context.Context, req resource.ImportSt
 
 // v30+ helper methods for synonym sets
 
-// createSynonymV30 creates or updates a synonym using the v30 synonym sets API.
+// getSetMutex returns a per-collection mutex for serializing synonym set creation.
+func getSetMutex(collection string) *sync.Mutex {
+	mu, _ := synonymSetMu.LoadOrStore(collection, &sync.Mutex{})
+	return mu.(*sync.Mutex)
+}
+
+// ensureSynonymSetExists ensures the synonym set for a collection exists, creating it if needed.
+// Uses a per-collection mutex to prevent the race condition where concurrent empty-set creates
+// could overwrite items added by other goroutines.
+func (r *SynonymResource) ensureSynonymSetExists(ctx context.Context, collection string) error {
+	mu := getSetMutex(collection)
+	mu.Lock()
+	defer mu.Unlock()
+
+	return r.client.EnsureSynonymSetExists(ctx, collection)
+}
+
+// createSynonymV30 creates or updates a synonym using the v30 synonym sets item-level API.
 // The collection name is used as the synonym set name.
 func (r *SynonymResource) createSynonymV30(ctx context.Context, collection, name, root string, synonyms []string) error {
-	// Get existing synonym set or create new one
-	existingSet, err := r.client.GetSynonymSet(ctx, collection)
+	// Ensure the synonym set exists (serialized per collection)
+	if err := r.ensureSynonymSetExists(ctx, collection); err != nil {
+		return fmt.Errorf("failed to ensure synonym set: %w", err)
+	}
+
+	// Use item-level API (safe for concurrent access)
+	item := &client.SynonymItem{
+		ID:       name,
+		Root:     root,
+		Synonyms: synonyms,
+	}
+	_, err := r.client.UpsertSynonymSetItem(ctx, collection, item)
 	if err != nil {
-		return fmt.Errorf("failed to get synonym set: %w", err)
-	}
-
-	var synSet *client.SynonymSet
-	if existingSet == nil {
-		// Create new synonym set
-		synSet = &client.SynonymSet{
-			Name:     collection,
-			Synonyms: []client.SynonymItem{},
-		}
-	} else {
-		synSet = existingSet
-	}
-
-	// Find and update or add the synonym item
-	found := false
-	for i, item := range synSet.Synonyms {
-		if item.ID == name {
-			synSet.Synonyms[i] = client.SynonymItem{
-				ID:       name,
-				Root:     root,
-				Synonyms: synonyms,
-			}
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		synSet.Synonyms = append(synSet.Synonyms, client.SynonymItem{
-			ID:       name,
-			Root:     root,
-			Synonyms: synonyms,
-		})
-	}
-
-	// Upsert the synonym set
-	_, err = r.client.UpsertSynonymSet(ctx, synSet)
-	if err != nil {
-		return fmt.Errorf("failed to upsert synonym set: %w", err)
+		return fmt.Errorf("failed to upsert synonym item: %w", err)
 	}
 
 	return nil
@@ -422,56 +415,10 @@ func (r *SynonymResource) createSynonymV30(ctx context.Context, collection, name
 
 // getSynonymV30 retrieves a specific synonym from a v30 synonym set.
 func (r *SynonymResource) getSynonymV30(ctx context.Context, collection, name string) (*client.SynonymItem, error) {
-	synSet, err := r.client.GetSynonymSet(ctx, collection)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get synonym set: %w", err)
-	}
-
-	if synSet == nil {
-		return nil, nil
-	}
-
-	for _, item := range synSet.Synonyms {
-		if item.ID == name {
-			return &item, nil
-		}
-	}
-
-	return nil, nil
+	return r.client.GetSynonymSetItem(ctx, collection, name)
 }
 
 // deleteSynonymV30 removes a synonym from a v30 synonym set.
-// If the synonym set becomes empty, it deletes the entire set.
 func (r *SynonymResource) deleteSynonymV30(ctx context.Context, collection, name string) error {
-	synSet, err := r.client.GetSynonymSet(ctx, collection)
-	if err != nil {
-		return fmt.Errorf("failed to get synonym set: %w", err)
-	}
-
-	if synSet == nil {
-		// Already deleted
-		return nil
-	}
-
-	// Remove the synonym item
-	newSynonyms := make([]client.SynonymItem, 0, len(synSet.Synonyms))
-	for _, item := range synSet.Synonyms {
-		if item.ID != name {
-			newSynonyms = append(newSynonyms, item)
-		}
-	}
-
-	if len(newSynonyms) == 0 {
-		// Delete the entire synonym set if empty
-		return r.client.DeleteSynonymSet(ctx, collection)
-	}
-
-	// Update the synonym set without the deleted item
-	synSet.Synonyms = newSynonyms
-	_, err = r.client.UpsertSynonymSet(ctx, synSet)
-	if err != nil {
-		return fmt.Errorf("failed to update synonym set: %w", err)
-	}
-
-	return nil
+	return r.client.DeleteSynonymSetItem(ctx, collection, name)
 }
