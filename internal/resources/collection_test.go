@@ -245,3 +245,243 @@ resource "typesense_collection" "test" {
 }
 `, name)
 }
+
+// TestAccCollectionResource_vectorSearch tests creating a collection with
+// vector search fields (num_dim, vec_dist).
+func TestAccCollectionResource_vectorSearch(t *testing.T) {
+	rName := acctest.RandomWithPrefix("test-vector")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "typesense_collection" "test" {
+  name = %[1]q
+
+  field {
+    name = "id"
+    type = "string"
+  }
+
+  field {
+    name = "title"
+    type = "string"
+  }
+
+  field {
+    name     = "embedding"
+    type     = "float[]"
+    num_dim  = 384
+    vec_dist = "cosine"
+  }
+}
+`, rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("typesense_collection.test", "name", rName),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.#", "3"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.name", "embedding"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.type", "float[]"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.num_dim", "384"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.vec_dist", "cosine"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccCollectionResource_stemRangeIndexStore tests creating a collection with
+// stem, range_index, and store field attributes.
+func TestAccCollectionResource_stemRangeIndexStore(t *testing.T) {
+	rName := acctest.RandomWithPrefix("test-attrs")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "typesense_collection" "test" {
+  name = %[1]q
+
+  field {
+    name = "id"
+    type = "string"
+  }
+
+  field {
+    name = "title"
+    type = "string"
+    stem = true
+  }
+
+  field {
+    name        = "price"
+    type        = "float"
+    range_index = true
+  }
+
+  field {
+    name  = "raw_data"
+    type  = "string"
+    store = false
+    index = false
+  }
+}
+`, rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("typesense_collection.test", "name", rName),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.#", "4"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.1.name", "title"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.1.stem", "true"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.name", "price"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.range_index", "true"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.3.name", "raw_data"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.3.store", "false"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.3.index", "false"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccCollectionResource_fieldLevelSeparators tests creating a collection with
+// field-level token_separators and symbols_to_index.
+func TestAccCollectionResource_fieldLevelSeparators(t *testing.T) {
+	rName := acctest.RandomWithPrefix("test-seps")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "typesense_collection" "test" {
+  name = %[1]q
+
+  field {
+    name = "id"
+    type = "string"
+  }
+
+  field {
+    name             = "sku"
+    type             = "string"
+    token_separators = ["-", "_"]
+    symbols_to_index = ["#", "+"]
+  }
+}
+`, rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("typesense_collection.test", "name", rName),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.#", "2"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.1.name", "sku"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.1.token_separators.#", "2"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.1.token_separators.0", "-"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.1.token_separators.1", "_"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.1.symbols_to_index.#", "2"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.1.symbols_to_index.0", "#"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.1.symbols_to_index.1", "+"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccCollectionResource_collectionMetadata tests creating a collection with
+// collection-level metadata and voice_query_model.
+func TestAccCollectionResource_collectionMetadata(t *testing.T) {
+	rName := acctest.RandomWithPrefix("test-meta")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "typesense_collection" "test" {
+  name     = %[1]q
+  metadata = jsonencode({ version = "1.0", team = "search" })
+
+  field {
+    name = "id"
+    type = "string"
+  }
+
+  field {
+    name = "title"
+    type = "string"
+  }
+}
+`, rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("typesense_collection.test", "name", rName),
+					resource.TestCheckResourceAttrSet("typesense_collection.test", "metadata"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccCollectionResource_updateWithNewAttrs tests updating a collection to add
+// a new field with the new attributes (stem, range_index).
+func TestAccCollectionResource_updateWithNewAttrs(t *testing.T) {
+	rName := acctest.RandomWithPrefix("test-upd-attrs")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { provider.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: provider.TestAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "typesense_collection" "test" {
+  name = %[1]q
+
+  field {
+    name = "id"
+    type = "string"
+  }
+
+  field {
+    name = "title"
+    type = "string"
+  }
+}
+`, rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.#", "2"),
+				),
+			},
+			{
+				Config: fmt.Sprintf(`
+resource "typesense_collection" "test" {
+  name = %[1]q
+
+  field {
+    name = "id"
+    type = "string"
+  }
+
+  field {
+    name = "title"
+    type = "string"
+    stem = true
+  }
+
+  field {
+    name        = "price"
+    type        = "float"
+    range_index = true
+  }
+}
+`, rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.#", "3"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.name", "price"),
+					resource.TestCheckResourceAttr("typesense_collection.test", "field.2.range_index", "true"),
+				),
+			},
+		},
+	})
+}

@@ -87,19 +87,51 @@ type Collection struct {
 	EnableNestedFields  bool              `json:"enable_nested_fields,omitempty"`
 	NumDocuments        int64             `json:"num_documents,omitempty"`
 	CreatedAt           int64             `json:"created_at,omitempty"`
+	Metadata            map[string]any    `json:"metadata,omitempty"`
+	VoiceQueryModel     string            `json:"voice_query_model,omitempty"`
 }
 
 // CollectionField represents a field in a collection schema
 type CollectionField struct {
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Facet    bool   `json:"facet,omitempty"`
-	Optional bool   `json:"optional,omitempty"`
-	Index    *bool  `json:"index,omitempty"`
-	Sort     *bool  `json:"sort,omitempty"`
-	Infix    bool   `json:"infix,omitempty"`
-	Locale   string `json:"locale,omitempty"`
-	Drop     bool   `json:"drop,omitempty"`
+	Name            string            `json:"name"`
+	Type            string            `json:"type"`
+	Facet           bool              `json:"facet,omitempty"`
+	Optional        bool              `json:"optional,omitempty"`
+	Index           *bool             `json:"index,omitempty"`
+	Sort            *bool             `json:"sort,omitempty"`
+	Infix           bool              `json:"infix,omitempty"`
+	Locale          string            `json:"locale,omitempty"`
+	Drop            bool              `json:"drop,omitempty"`
+	NumDim          int64             `json:"num_dim,omitempty"`
+	VecDist         string            `json:"vec_dist,omitempty"`
+	Embed           *FieldEmbed       `json:"embed,omitempty"`
+	HnswParams      *FieldHnswParams  `json:"hnsw_params,omitempty"`
+	Reference       string            `json:"reference,omitempty"`
+	AsyncReference  string            `json:"async_reference,omitempty"`
+	Stem            *bool             `json:"stem,omitempty"`
+	RangeIndex      *bool             `json:"range_index,omitempty"`
+	Store           *bool             `json:"store,omitempty"`
+	TokenSeparators []string          `json:"token_separators,omitempty"`
+	SymbolsToIndex  []string          `json:"symbols_to_index,omitempty"`
+}
+
+// FieldEmbed represents the auto-embedding configuration for a field
+type FieldEmbed struct {
+	From        []string         `json:"from"`
+	ModelConfig FieldModelConfig `json:"model_config"`
+}
+
+// FieldModelConfig represents the model configuration within an embed block
+type FieldModelConfig struct {
+	ModelName string `json:"model_name"`
+	APIKey    string `json:"api_key,omitempty"`
+	URL       string `json:"url,omitempty"`
+}
+
+// FieldHnswParams represents the HNSW algorithm tuning parameters
+type FieldHnswParams struct {
+	EfConstruction int64 `json:"ef_construction,omitempty"`
+	M              int64 `json:"M,omitempty"`
 }
 
 // Synonym represents a Typesense synonym configuration
