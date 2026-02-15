@@ -2,6 +2,7 @@ package generator
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -56,5 +57,25 @@ func StopwordsImportID(id string) string {
 
 // ClusterImportID returns the import ID for a cluster
 func ClusterImportID(id string) string {
+	return id
+}
+
+// AnalyticsRuleImportID returns the import ID for an analytics rule
+func AnalyticsRuleImportID(name string) string {
+	return name
+}
+
+// APIKeyImportID returns the import ID for an API key
+func APIKeyImportID(id int64) string {
+	return strconv.FormatInt(id, 10)
+}
+
+// NLSearchModelImportID returns the import ID for an NL search model
+func NLSearchModelImportID(id string) string {
+	return id
+}
+
+// ConversationModelImportID returns the import ID for a conversation model
+func ConversationModelImportID(id string) string {
 	return id
 }

@@ -2000,3 +2000,67 @@ func (c *ServerClient) ListAPIKeys(ctx context.Context) ([]APIKey, error) {
 
 	return wrapper.Keys, nil
 }
+
+// ListNLSearchModels retrieves all NL search models
+func (c *ServerClient) ListNLSearchModels(ctx context.Context) ([]NLSearchModel, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/nl_search_models", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list NL search models: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list NL search models: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result []NLSearchModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return result, nil
+}
+
+// ListConversationModels retrieves all conversation models
+func (c *ServerClient) ListConversationModels(ctx context.Context) ([]ConversationModel, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/conversations/models", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list conversation models: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list conversation models: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result []ConversationModel
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return result, nil
+}
