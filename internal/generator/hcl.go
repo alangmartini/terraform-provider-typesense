@@ -88,6 +88,78 @@ func generateCollectionBlock(c *client.Collection, resourceName string) *hclwrit
 		if field.Locale != "" {
 			fieldBody.SetAttributeValue("locale", cty.StringVal(field.Locale))
 		}
+		if field.NumDim > 0 {
+			fieldBody.SetAttributeValue("num_dim", cty.NumberIntVal(field.NumDim))
+		}
+		if field.VecDist != "" {
+			fieldBody.SetAttributeValue("vec_dist", cty.StringVal(field.VecDist))
+		}
+		if field.Reference != "" {
+			fieldBody.SetAttributeValue("reference", cty.StringVal(field.Reference))
+		}
+		if field.AsyncReference != "" {
+			fieldBody.SetAttributeValue("async_reference", cty.StringVal(field.AsyncReference))
+		}
+		if field.Stem != nil && *field.Stem {
+			fieldBody.SetAttributeValue("stem", cty.BoolVal(true))
+		}
+		if field.RangeIndex != nil && *field.RangeIndex {
+			fieldBody.SetAttributeValue("range_index", cty.BoolVal(true))
+		}
+		if field.Store != nil && !*field.Store {
+			fieldBody.SetAttributeValue("store", cty.BoolVal(false))
+		}
+		if len(field.TokenSeparators) > 0 {
+			sVals := make([]cty.Value, len(field.TokenSeparators))
+			for i, v := range field.TokenSeparators {
+				sVals[i] = cty.StringVal(v)
+			}
+			fieldBody.SetAttributeValue("token_separators", cty.ListVal(sVals))
+		}
+		if len(field.SymbolsToIndex) > 0 {
+			sVals := make([]cty.Value, len(field.SymbolsToIndex))
+			for i, v := range field.SymbolsToIndex {
+				sVals[i] = cty.StringVal(v)
+			}
+			fieldBody.SetAttributeValue("symbols_to_index", cty.ListVal(sVals))
+		}
+		if field.Embed != nil {
+			embedBlock := fieldBody.AppendNewBlock("embed", nil)
+			embedBody := embedBlock.Body()
+			if len(field.Embed.From) > 0 {
+				fromVals := make([]cty.Value, len(field.Embed.From))
+				for i, v := range field.Embed.From {
+					fromVals[i] = cty.StringVal(v)
+				}
+				embedBody.SetAttributeValue("from", cty.ListVal(fromVals))
+			}
+			mcBlock := embedBody.AppendNewBlock("model_config", nil)
+			mcBody := mcBlock.Body()
+			mcBody.SetAttributeValue("model_name", cty.StringVal(field.Embed.ModelConfig.ModelName))
+			if field.Embed.ModelConfig.URL != "" {
+				mcBody.SetAttributeValue("url", cty.StringVal(field.Embed.ModelConfig.URL))
+			}
+			// Intentionally omit api_key from generated HCL (sensitive)
+		}
+		if field.HnswParams != nil {
+			hpBlock := fieldBody.AppendNewBlock("hnsw_params", nil)
+			hpBody := hpBlock.Body()
+			if field.HnswParams.EfConstruction > 0 {
+				hpBody.SetAttributeValue("ef_construction", cty.NumberIntVal(field.HnswParams.EfConstruction))
+			}
+			if field.HnswParams.M > 0 {
+				hpBody.SetAttributeValue("m", cty.NumberIntVal(field.HnswParams.M))
+			}
+		}
+	}
+
+	// Collection-level metadata
+	if c.Metadata != nil {
+		// Note: metadata is stored as a JSON string in HCL
+		// For generated HCL, we skip metadata since it's complex JSON
+	}
+	if c.VoiceQueryModel != "" {
+		body.SetAttributeValue("voice_query_model", cty.StringVal(c.VoiceQueryModel))
 	}
 
 	return block
