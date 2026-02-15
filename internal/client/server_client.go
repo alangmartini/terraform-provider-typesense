@@ -107,7 +107,7 @@ type CollectionField struct {
 	Embed           *FieldEmbed       `json:"embed,omitempty"`
 	HnswParams      *FieldHnswParams  `json:"hnsw_params,omitempty"`
 	Reference       string            `json:"reference,omitempty"`
-	AsyncReference  string            `json:"async_reference,omitempty"`
+	AsyncReference  *bool             `json:"async_reference,omitempty"`
 	Stem            *bool             `json:"stem,omitempty"`
 	RangeIndex      *bool             `json:"range_index,omitempty"`
 	Store           *bool             `json:"store,omitempty"`

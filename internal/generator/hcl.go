@@ -98,8 +98,8 @@ func generateCollectionBlock(c *client.Collection, resourceName string) *hclwrit
 		if field.Reference != "" {
 			fieldBody.SetAttributeValue("reference", cty.StringVal(field.Reference))
 		}
-		if field.AsyncReference != "" {
-			fieldBody.SetAttributeValue("async_reference", cty.StringVal(field.AsyncReference))
+		if field.AsyncReference != nil && *field.AsyncReference {
+			fieldBody.SetAttributeValue("async_reference", cty.BoolVal(true))
 		}
 		if field.Stem != nil && *field.Stem {
 			fieldBody.SetAttributeValue("stem", cty.BoolVal(true))

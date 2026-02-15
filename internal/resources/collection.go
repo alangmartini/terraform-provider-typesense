@@ -62,7 +62,7 @@ type CollectionFieldModel struct {
 	Embed           types.Object `tfsdk:"embed"`
 	HnswParams      types.Object `tfsdk:"hnsw_params"`
 	Reference       types.String `tfsdk:"reference"`
-	AsyncReference  types.String `tfsdk:"async_reference"`
+	AsyncReference  types.Bool   `tfsdk:"async_reference"`
 	Stem            types.Bool   `tfsdk:"stem"`
 	RangeIndex      types.Bool   `tfsdk:"range_index"`
 	Store           types.Bool   `tfsdk:"store"`
@@ -105,7 +105,7 @@ func fieldAttrTypes() map[string]attr.Type {
 		"embed":            types.ObjectType{AttrTypes: embedAttrTypes},
 		"hnsw_params":      types.ObjectType{AttrTypes: hnswParamsAttrTypes},
 		"reference":        types.StringType,
-		"async_reference":  types.StringType,
+		"async_reference":  types.BoolType,
 		"stem":             types.BoolType,
 		"range_index":      types.BoolType,
 		"store":            types.BoolType,
@@ -261,6 +261,7 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 						"hnsw_params": schema.SingleNestedAttribute{
 							Description: "HNSW algorithm tuning parameters for vector fields.",
 							Optional:    true,
+							Computed:    true,
 							Attributes: map[string]schema.Attribute{
 								"ef_construction": schema.Int64Attribute{
 									Description: "HNSW ef_construction parameter. Default: 200.",
@@ -281,12 +282,10 @@ func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequ
 								stringplanmodifier.RequiresReplace(),
 							},
 						},
-						"async_reference": schema.StringAttribute{
-							Description: "Async reference to another collection field for JOINs with large reference sets. Cannot be added via update; requires collection recreation.",
+						"async_reference": schema.BoolAttribute{
+							Description: "Enable async reference for JOINs with large reference sets. Cannot be added via update; requires collection recreation.",
 							Optional:    true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.RequiresReplace(),
-							},
+							Computed:    true,
 						},
 						"stem": schema.BoolAttribute{
 							Description: "Enable stemming during indexing for this field.",
@@ -667,7 +666,8 @@ func (r *CollectionResource) extractFields(ctx context.Context, data *Collection
 			field.Reference = fm.Reference.ValueString()
 		}
 		if !fm.AsyncReference.IsNull() && !fm.AsyncReference.IsUnknown() {
-			field.AsyncReference = fm.AsyncReference.ValueString()
+			v := fm.AsyncReference.ValueBool()
+			field.AsyncReference = &v
 		}
 
 		// Stem
@@ -849,7 +849,7 @@ func (r *CollectionResource) buildIdFieldObject(ctx context.Context, ef Collecti
 	if !ef.Reference.IsNull() && !ef.Reference.IsUnknown() {
 		refVal = ef.Reference
 	}
-	asyncRefVal := types.StringNull()
+	asyncRefVal := types.BoolNull()
 	if !ef.AsyncReference.IsNull() && !ef.AsyncReference.IsUnknown() {
 		asyncRefVal = ef.AsyncReference
 	}
@@ -974,9 +974,9 @@ func (r *CollectionResource) apiFieldToObjectValue(ctx context.Context, f client
 	}
 
 	// async_reference
-	asyncRefVal := types.StringNull()
-	if f.AsyncReference != "" {
-		asyncRefVal = types.StringValue(f.AsyncReference)
+	asyncRefVal := types.BoolNull()
+	if f.AsyncReference != nil {
+		asyncRefVal = types.BoolValue(*f.AsyncReference)
 	}
 
 	// stem
