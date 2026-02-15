@@ -7,6 +7,7 @@ import (
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
+	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -25,7 +26,8 @@ func NewAnalyticsRuleResource() resource.Resource {
 
 // AnalyticsRuleResource defines the resource implementation.
 type AnalyticsRuleResource struct {
-	client *client.ServerClient
+	client         *client.ServerClient
+	featureChecker version.FeatureChecker
 }
 
 // AnalyticsRuleResourceModel describes the resource data model.
@@ -107,9 +109,15 @@ func (r *AnalyticsRuleResource) Configure(ctx context.Context, req resource.Conf
 	}
 
 	r.client = providerData.ServerClient
+	r.featureChecker = providerData.FeatureChecker
 }
 
 func (r *AnalyticsRuleResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if diags := version.CheckVersionRequirement(r.featureChecker, version.FeatureAnalyticsRules, "typesense_analytics_rule"); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
 	var data AnalyticsRuleResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
