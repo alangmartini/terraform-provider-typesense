@@ -6,6 +6,7 @@ import (
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
+	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -25,7 +26,8 @@ func NewConversationModelResource() resource.Resource {
 
 // ConversationModelResource defines the resource implementation.
 type ConversationModelResource struct {
-	client *client.ServerClient
+	client         *client.ServerClient
+	featureChecker version.FeatureChecker
 }
 
 // ConversationModelResourceModel describes the resource data model.
@@ -126,9 +128,15 @@ func (r *ConversationModelResource) Configure(ctx context.Context, req resource.
 	}
 
 	r.client = providerData.ServerClient
+	r.featureChecker = providerData.FeatureChecker
 }
 
 func (r *ConversationModelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if diags := version.CheckVersionRequirement(r.featureChecker, version.FeatureConversationModels, "typesense_conversation_model"); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
 	var data ConversationModelResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
