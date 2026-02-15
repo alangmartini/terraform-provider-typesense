@@ -141,6 +141,26 @@ func (g *Generator) Generate(ctx context.Context) error {
 		if err := g.generateOverrides(ctx, f, resourceNames, collectionResourceMap, &importCommands); err != nil {
 			return fmt.Errorf("failed to generate overrides: %w", err)
 		}
+
+		// Analytics rules (may reference collections)
+		if err := g.generateAnalyticsRules(ctx, f, resourceNames, &importCommands); err != nil {
+			return fmt.Errorf("failed to generate analytics rules: %w", err)
+		}
+
+		// API keys
+		if err := g.generateAPIKeys(ctx, f, resourceNames, &importCommands); err != nil {
+			return fmt.Errorf("failed to generate API keys: %w", err)
+		}
+
+		// NL search models
+		if err := g.generateNLSearchModels(ctx, f, resourceNames, &importCommands); err != nil {
+			return fmt.Errorf("failed to generate NL search models: %w", err)
+		}
+
+		// Conversation models
+		if err := g.generateConversationModels(ctx, f, resourceNames, &importCommands); err != nil {
+			return fmt.Errorf("failed to generate conversation models: %w", err)
+		}
 	}
 
 	// Write main.tf
@@ -542,6 +562,134 @@ func (g *Generator) generateCurationSetsV30Fallback(ctx context.Context, f *hclw
 			{Type: 4, Bytes: []byte(comment)},
 		})
 		_ = resourceName
+	}
+
+	return nil
+}
+
+func (g *Generator) generateAnalyticsRules(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
+	rules, err := g.serverClient.ListAnalyticsRules(ctx)
+	if err != nil {
+		return err
+	}
+
+	if len(rules) == 0 {
+		return nil
+	}
+
+	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte("# ============================================\n# ANALYTICS RULES\n# ============================================\n\n")},
+	})
+
+	for _, rule := range rules {
+		resourceName := MakeUniqueResourceName(rule.Name, resourceNames)
+		block := generateAnalyticsRuleBlock(&rule, resourceName)
+		f.Body().AppendBlock(block)
+		f.Body().AppendNewline()
+
+		*importCommands = append(*importCommands, ImportCommand{
+			ResourceType: "typesense_analytics_rule",
+			ResourceName: resourceName,
+			ImportID:     AnalyticsRuleImportID(rule.Name),
+		})
+	}
+
+	return nil
+}
+
+func (g *Generator) generateAPIKeys(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
+	keys, err := g.serverClient.ListAPIKeys(ctx)
+	if err != nil {
+		return err
+	}
+
+	if len(keys) == 0 {
+		return nil
+	}
+
+	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte("# ============================================\n# API KEYS\n# ============================================\n\n")},
+	})
+
+	for _, key := range keys {
+		name := key.Description
+		if name == "" {
+			name = fmt.Sprintf("key_%d", key.ID)
+		}
+		resourceName := MakeUniqueResourceName(name, resourceNames)
+		block := generateAPIKeyBlock(&key, resourceName)
+		f.Body().AppendBlock(block)
+		f.Body().AppendNewline()
+
+		*importCommands = append(*importCommands, ImportCommand{
+			ResourceType: "typesense_api_key",
+			ResourceName: resourceName,
+			ImportID:     APIKeyImportID(key.ID),
+		})
+	}
+
+	return nil
+}
+
+func (g *Generator) generateNLSearchModels(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
+	models, err := g.serverClient.ListNLSearchModels(ctx)
+	if err != nil {
+		// NL search models may not be available on all server versions
+		fmt.Fprintf(os.Stderr, "Warning: Could not list NL search models: %v\n", err)
+		return nil
+	}
+
+	if len(models) == 0 {
+		return nil
+	}
+
+	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte("# ============================================\n# NL SEARCH MODELS\n# Note: api_key must be set via var.openai_api_key\n# ============================================\n\n")},
+	})
+
+	for _, model := range models {
+		resourceName := MakeUniqueResourceName(model.ID, resourceNames)
+		block := generateNLSearchModelBlock(&model, resourceName)
+		f.Body().AppendBlock(block)
+		f.Body().AppendNewline()
+
+		*importCommands = append(*importCommands, ImportCommand{
+			ResourceType: "typesense_nl_search_model",
+			ResourceName: resourceName,
+			ImportID:     NLSearchModelImportID(model.ID),
+		})
+	}
+
+	return nil
+}
+
+func (g *Generator) generateConversationModels(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
+	models, err := g.serverClient.ListConversationModels(ctx)
+	if err != nil {
+		// Conversation models may not be available on all server versions
+		fmt.Fprintf(os.Stderr, "Warning: Could not list conversation models: %v\n", err)
+		return nil
+	}
+
+	if len(models) == 0 {
+		return nil
+	}
+
+	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte("# ============================================\n# CONVERSATION MODELS\n# Note: api_key must be set via var.openai_api_key\n# ============================================\n\n")},
+	})
+
+	for _, model := range models {
+		resourceName := MakeUniqueResourceName(model.ID, resourceNames)
+		block := generateConversationModelBlock(&model, resourceName)
+		f.Body().AppendBlock(block)
+		f.Body().AppendNewline()
+
+		*importCommands = append(*importCommands, ImportCommand{
+			ResourceType: "typesense_conversation_model",
+			ResourceName: resourceName,
+			ImportID:     ConversationModelImportID(model.ID),
+		})
 	}
 
 	return nil

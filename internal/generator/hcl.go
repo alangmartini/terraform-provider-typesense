@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
@@ -251,3 +252,151 @@ func generateClusterBlock(cl *client.Cluster, resourceName string) *hclwrite.Blo
 
 	return block
 }
+
+// generateAnalyticsRuleBlock creates an HCL block for an analytics rule resource
+func generateAnalyticsRuleBlock(rule *client.AnalyticsRule, resourceName string) *hclwrite.Block {
+	block := hclwrite.NewBlock("resource", []string{"typesense_analytics_rule", resourceName})
+	body := block.Body()
+
+	body.SetAttributeValue("name", cty.StringVal(rule.Name))
+	body.SetAttributeValue("type", cty.StringVal(rule.Type))
+
+	if rule.Collection != "" {
+		body.SetAttributeValue("collection", cty.StringVal(rule.Collection))
+	}
+
+	if rule.EventType != "" {
+		body.SetAttributeValue("event_type", cty.StringVal(rule.EventType))
+	}
+
+	// Serialize params as JSON string
+	if len(rule.Params) > 0 {
+		paramsJSON, err := json.Marshal(rule.Params)
+		if err == nil {
+			body.SetAttributeValue("params", cty.StringVal(string(paramsJSON)))
+		}
+	}
+
+	return block
+}
+
+// generateAPIKeyBlock creates an HCL block for an API key resource
+func generateAPIKeyBlock(key *client.APIKey, resourceName string) *hclwrite.Block {
+	block := hclwrite.NewBlock("resource", []string{"typesense_api_key", resourceName})
+	body := block.Body()
+
+	// Add comment about non-recoverable key value
+	body.AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte("# Note: API key value is not recoverable after creation. The imported key will have a placeholder value.\n")},
+	})
+
+	if key.Description != "" {
+		body.SetAttributeValue("description", cty.StringVal(key.Description))
+	}
+
+	if len(key.Actions) > 0 {
+		vals := make([]cty.Value, len(key.Actions))
+		for i, v := range key.Actions {
+			vals[i] = cty.StringVal(v)
+		}
+		body.SetAttributeValue("actions", cty.ListVal(vals))
+	}
+
+	if len(key.Collections) > 0 {
+		vals := make([]cty.Value, len(key.Collections))
+		for i, v := range key.Collections {
+			vals[i] = cty.StringVal(v)
+		}
+		body.SetAttributeValue("collections", cty.ListVal(vals))
+	}
+
+	// Only include expires_at if it has a reasonable value (before year 3000)
+	if key.ExpiresAt > 0 && key.ExpiresAt < 32503680000 {
+		body.SetAttributeValue("expires_at", cty.NumberIntVal(key.ExpiresAt))
+	}
+
+	return block
+}
+
+// generateNLSearchModelBlock creates an HCL block for a NL search model resource
+func generateNLSearchModelBlock(model *client.NLSearchModel, resourceName string) *hclwrite.Block {
+	block := hclwrite.NewBlock("resource", []string{"typesense_nl_search_model", resourceName})
+	body := block.Body()
+
+	body.SetAttributeValue("id", cty.StringVal(model.ID))
+	body.SetAttributeValue("model_name", cty.StringVal(model.ModelName))
+
+	// API key is sensitive and not returned by the API - use a variable reference
+	body.AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte("# api_key is sensitive and not recoverable from the API. Set via variable.\n")},
+		{Type: 9, Bytes: []byte("api_key")},
+		{Type: 11, Bytes: []byte(" = ")},
+		{Type: 9, Bytes: []byte("var.openai_api_key")},
+		{Type: 10, Bytes: []byte("\n")},
+	})
+
+	if model.SystemPrompt != "" {
+		body.SetAttributeValue("system_prompt", cty.StringVal(model.SystemPrompt))
+	}
+
+	if model.MaxBytes > 0 {
+		body.SetAttributeValue("max_bytes", cty.NumberIntVal(model.MaxBytes))
+	}
+
+	if model.Temperature != nil {
+		body.SetAttributeValue("temperature", cty.NumberFloatVal(*model.Temperature))
+	}
+
+	if model.AccountID != "" {
+		body.SetAttributeValue("account_id", cty.StringVal(model.AccountID))
+	}
+
+	if model.APIURL != "" {
+		body.SetAttributeValue("api_url", cty.StringVal(model.APIURL))
+	}
+
+	return block
+}
+
+// generateConversationModelBlock creates an HCL block for a conversation model resource
+func generateConversationModelBlock(model *client.ConversationModel, resourceName string) *hclwrite.Block {
+	block := hclwrite.NewBlock("resource", []string{"typesense_conversation_model", resourceName})
+	body := block.Body()
+
+	if model.ID != "" {
+		body.SetAttributeValue("id", cty.StringVal(model.ID))
+	}
+
+	body.SetAttributeValue("model_name", cty.StringVal(model.ModelName))
+
+	// API key is sensitive and not returned by the API - use a variable reference
+	body.AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte("# api_key is sensitive and not recoverable from the API. Set via variable.\n")},
+		{Type: 9, Bytes: []byte("api_key")},
+		{Type: 11, Bytes: []byte(" = ")},
+		{Type: 9, Bytes: []byte("var.openai_api_key")},
+		{Type: 10, Bytes: []byte("\n")},
+	})
+
+	body.SetAttributeValue("history_collection", cty.StringVal(model.HistoryCollection))
+	body.SetAttributeValue("system_prompt", cty.StringVal(model.SystemPrompt))
+
+	if model.TTL > 0 {
+		body.SetAttributeValue("ttl", cty.NumberIntVal(model.TTL))
+	}
+
+	if model.MaxBytes > 0 {
+		body.SetAttributeValue("max_bytes", cty.NumberIntVal(model.MaxBytes))
+	}
+
+	if model.AccountID != "" {
+		body.SetAttributeValue("account_id", cty.StringVal(model.AccountID))
+	}
+
+	if model.VllmURL != "" {
+		body.SetAttributeValue("vllm_url", cty.StringVal(model.VllmURL))
+	}
+
+	return block
+}
+
