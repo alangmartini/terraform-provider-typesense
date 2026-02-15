@@ -9,10 +9,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 )
 
 // Well-known version boundaries for feature detection
 var (
+	V26_0 = MustParse("26.0")
+	V27_0 = MustParse("27.0")
+	V28_0 = MustParse("28.0")
 	V29_0 = MustParse("29.0")
 	V30_0 = MustParse("30.0")
 )
@@ -229,6 +234,30 @@ const (
 	// (/collections/{name}/overrides)
 	// Available in v29 and earlier
 	FeaturePerCollectionOverrides Feature = "per_collection_overrides"
+
+	// FeatureConversationModels indicates support for conversation models (RAG)
+	// Available in v26.0+
+	FeatureConversationModels Feature = "conversation_models"
+
+	// FeaturePresets indicates support for search presets
+	// Available in v27.0+
+	FeaturePresets Feature = "presets"
+
+	// FeatureStopwords indicates support for stopwords sets
+	// Available in v27.0+
+	FeatureStopwords Feature = "stopwords"
+
+	// FeatureAnalyticsRules indicates support for analytics rules
+	// Available in v28.0+
+	FeatureAnalyticsRules Feature = "analytics_rules"
+
+	// FeatureNLSearchModels indicates support for natural language search models
+	// Available in v29.0+
+	FeatureNLSearchModels Feature = "nl_search_models"
+
+	// FeatureStemmingDictionaries indicates support for stemming dictionaries
+	// Available in v29.0+
+	FeatureStemmingDictionaries Feature = "stemming_dictionaries"
 )
 
 // featureVersions maps features to their minimum required version.
@@ -238,6 +267,12 @@ var featureVersions = map[Feature]*Version{
 	FeatureCurationSets:           V30_0,
 	FeaturePerCollectionSynonyms:  nil, // Available in older versions, removed in v30
 	FeaturePerCollectionOverrides: nil, // Available in older versions, removed in v30
+	FeatureConversationModels:     V26_0,
+	FeaturePresets:                V27_0,
+	FeatureStopwords:              V27_0,
+	FeatureAnalyticsRules:         V28_0,
+	FeatureNLSearchModels:         V29_0,
+	FeatureStemmingDictionaries:   V29_0,
 }
 
 // featureMaxVersions maps features to their maximum supported version (exclusive).
@@ -318,5 +353,38 @@ func (c *FallbackFeatureChecker) SupportsFeature(feature Feature) bool {
 
 // GetVersion returns nil for the fallback checker.
 func (c *FallbackFeatureChecker) GetVersion() *Version {
+	return nil
+}
+
+// featureMinVersionString returns a human-readable minimum version string for a feature.
+func featureMinVersionString(feature Feature) string {
+	if minVer, ok := featureVersions[feature]; ok && minVer != nil {
+		return fmt.Sprintf("v%d.%d+", minVer.Major, minVer.Minor)
+	}
+	return "unknown version"
+}
+
+// CheckVersionRequirement checks if the server version supports the given feature
+// and returns an error diagnostic if it does not. When the server version is unknown
+// (FallbackFeatureChecker), the check is skipped to allow runtime detection.
+func CheckVersionRequirement(checker FeatureChecker, feature Feature, resourceName string) diag.Diagnostics {
+	// If version is unknown, skip the guard and let the API call fail naturally.
+	// This allows runtime detection via 404 handling.
+	if checker.GetVersion() == nil {
+		return nil
+	}
+
+	if !checker.SupportsFeature(feature) {
+		return diag.Diagnostics{
+			diag.NewErrorDiagnostic(
+				fmt.Sprintf("%s requires a newer Typesense version", resourceName),
+				fmt.Sprintf(
+					"The %s resource requires Typesense %s. Your server is running v%s. "+
+						"Please upgrade your Typesense server or remove this resource from your configuration.",
+					resourceName, featureMinVersionString(feature), checker.GetVersion().String(),
+				),
+			),
+		}
+	}
 	return nil
 }
