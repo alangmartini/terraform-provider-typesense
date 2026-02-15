@@ -199,3 +199,203 @@ func TestGenerateClusterBlock(t *testing.T) {
 		t.Error("Block should contain auto_upgrade_capacity")
 	}
 }
+
+func TestGenerateAnalyticsRuleBlock(t *testing.T) {
+	rule := &client.AnalyticsRule{
+		Name:       "popular_searches",
+		Type:       "popular_queries",
+		Collection: "products",
+		EventType:  "search",
+		Params: map[string]any{
+			"destination_collection": "product_queries",
+			"limit":                  float64(1000),
+		},
+	}
+
+	block := generateAnalyticsRuleBlock(rule, "popular_searches")
+	hcl := blockToHCL(block)
+
+	if !strings.Contains(hcl, `resource "typesense_analytics_rule" "popular_searches"`) {
+		t.Error("Block should contain resource type and name")
+	}
+	if !containsAttr(hcl, "name", `"popular_searches"`) {
+		t.Error("Block should contain name attribute")
+	}
+	if !containsAttr(hcl, "type", `"popular_queries"`) {
+		t.Error("Block should contain type attribute")
+	}
+	if !containsAttr(hcl, "collection", `"products"`) {
+		t.Error("Block should contain collection attribute")
+	}
+	if !containsAttr(hcl, "event_type", `"search"`) {
+		t.Error("Block should contain event_type attribute")
+	}
+	if !strings.Contains(hcl, "destination_collection") {
+		t.Error("Block should contain params with destination_collection")
+	}
+}
+
+func TestGenerateAnalyticsRuleBlockCounter(t *testing.T) {
+	rule := &client.AnalyticsRule{
+		Name:       "click_counter",
+		Type:       "counter",
+		Collection: "products",
+		EventType:  "click",
+		Params: map[string]any{
+			"destination_collection": "product_clicks",
+			"counter_field":         "click_count",
+		},
+	}
+
+	block := generateAnalyticsRuleBlock(rule, "click_counter")
+	hcl := blockToHCL(block)
+
+	if !containsAttr(hcl, "type", `"counter"`) {
+		t.Error("Block should contain counter type")
+	}
+	if !containsAttr(hcl, "event_type", `"click"`) {
+		t.Error("Block should contain click event_type")
+	}
+}
+
+func TestGenerateAPIKeyBlock(t *testing.T) {
+	key := &client.APIKey{
+		ID:          1,
+		Description: "Search-only key",
+		Actions:     []string{"documents:search"},
+		Collections: []string{"products", "categories"},
+		ExpiresAt:   1735689600,
+	}
+
+	block := generateAPIKeyBlock(key, "search_only_key")
+	hcl := blockToHCL(block)
+
+	if !strings.Contains(hcl, `resource "typesense_api_key" "search_only_key"`) {
+		t.Error("Block should contain resource type and name")
+	}
+	if !strings.Contains(hcl, "API key value is not recoverable") {
+		t.Error("Block should contain comment about non-recoverable key")
+	}
+	if !containsAttr(hcl, "description", `"Search-only key"`) {
+		t.Error("Block should contain description")
+	}
+	if !strings.Contains(hcl, `"documents:search"`) {
+		t.Error("Block should contain actions")
+	}
+	if !strings.Contains(hcl, `"products"`) {
+		t.Error("Block should contain collections")
+	}
+	if !strings.Contains(hcl, "1735689600") {
+		t.Error("Block should contain expires_at")
+	}
+}
+
+func TestGenerateAPIKeyBlockNoExpiry(t *testing.T) {
+	key := &client.APIKey{
+		ID:          2,
+		Description: "Admin key",
+		Actions:     []string{"*"},
+		Collections: []string{"*"},
+		ExpiresAt:   64723363199, // Far-future default
+	}
+
+	block := generateAPIKeyBlock(key, "admin_key")
+	hcl := blockToHCL(block)
+
+	// Far-future expiry should be omitted
+	if strings.Contains(hcl, "expires_at") {
+		t.Error("Block should not contain expires_at for far-future default")
+	}
+}
+
+func TestGenerateNLSearchModelBlock(t *testing.T) {
+	temp := 0.5
+	model := &client.NLSearchModel{
+		ID:           "nl_model_1",
+		ModelName:    "openai/gpt-4o-mini",
+		SystemPrompt: "You are a search assistant.",
+		MaxBytes:     16000,
+		Temperature:  &temp,
+	}
+
+	block := generateNLSearchModelBlock(model, "nl_model_1")
+	hcl := blockToHCL(block)
+
+	if !strings.Contains(hcl, `resource "typesense_nl_search_model" "nl_model_1"`) {
+		t.Error("Block should contain resource type and name")
+	}
+	if !containsAttr(hcl, "id", `"nl_model_1"`) {
+		t.Error("Block should contain id attribute")
+	}
+	if !containsAttr(hcl, "model_name", `"openai/gpt-4o-mini"`) {
+		t.Error("Block should contain model_name")
+	}
+	if !strings.Contains(hcl, "var.openai_api_key") {
+		t.Error("Block should reference var.openai_api_key for api_key")
+	}
+	if !strings.Contains(hcl, "api_key is sensitive") {
+		t.Error("Block should contain comment about sensitive api_key")
+	}
+	if !containsAttr(hcl, "system_prompt", `"You are a search assistant."`) {
+		t.Error("Block should contain system_prompt")
+	}
+	if !strings.Contains(hcl, "16000") {
+		t.Error("Block should contain max_bytes")
+	}
+}
+
+func TestGenerateConversationModelBlock(t *testing.T) {
+	model := &client.ConversationModel{
+		ID:                "conv_model_1",
+		ModelName:         "openai/gpt-4o",
+		HistoryCollection: "conversation_history",
+		SystemPrompt:      "You are a helpful assistant.",
+		TTL:               86400,
+		MaxBytes:          32000,
+	}
+
+	block := generateConversationModelBlock(model, "conv_model_1")
+	hcl := blockToHCL(block)
+
+	if !strings.Contains(hcl, `resource "typesense_conversation_model" "conv_model_1"`) {
+		t.Error("Block should contain resource type and name")
+	}
+	if !containsAttr(hcl, "id", `"conv_model_1"`) {
+		t.Error("Block should contain id attribute")
+	}
+	if !containsAttr(hcl, "model_name", `"openai/gpt-4o"`) {
+		t.Error("Block should contain model_name")
+	}
+	if !strings.Contains(hcl, "var.openai_api_key") {
+		t.Error("Block should reference var.openai_api_key for api_key")
+	}
+	if !containsAttr(hcl, "history_collection", `"conversation_history"`) {
+		t.Error("Block should contain history_collection")
+	}
+	if !containsAttr(hcl, "system_prompt", `"You are a helpful assistant."`) {
+		t.Error("Block should contain system_prompt")
+	}
+	if !strings.Contains(hcl, "86400") {
+		t.Error("Block should contain ttl")
+	}
+	if !strings.Contains(hcl, "32000") {
+		t.Error("Block should contain max_bytes")
+	}
+}
+
+func TestGenerateConversationModelBlockWithVllm(t *testing.T) {
+	model := &client.ConversationModel{
+		ID:                "vllm_model",
+		ModelName:         "meta/llama-3-8b-instruct",
+		HistoryCollection: "chat_history",
+		SystemPrompt:      "Answer questions.",
+		VllmURL:           "http://localhost:8000",
+	}
+
+	block := generateConversationModelBlock(model, "vllm_model")
+	hcl := blockToHCL(block)
+
+	if !containsAttr(hcl, "vllm_url", `"http://localhost:8000"`) {
+		t.Error("Block should contain vllm_url")
+	}
+}
