@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/datasources"
 	"github.com/alanm/terraform-provider-typesense/internal/resources"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
 	"github.com/alanm/terraform-provider-typesense/internal/version"
@@ -140,7 +141,11 @@ func (p *TypesenseProvider) Resources(ctx context.Context) []func() resource.Res
 }
 
 func (p *TypesenseProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{}
+	return []func() datasource.DataSource{
+		datasources.NewCollectionsDataSource,
+		datasources.NewAPIKeysDataSource,
+		datasources.NewServerInfoDataSource,
+	}
 }
 
 // New creates a new provider instance
