@@ -7,6 +7,7 @@ import (
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
+	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -25,7 +26,8 @@ func NewPresetResource() resource.Resource {
 
 // PresetResource defines the resource implementation.
 type PresetResource struct {
-	client *client.ServerClient
+	client         *client.ServerClient
+	featureChecker version.FeatureChecker
 }
 
 // PresetResourceModel describes the resource data model.
@@ -89,9 +91,15 @@ func (r *PresetResource) Configure(ctx context.Context, req resource.ConfigureRe
 	}
 
 	r.client = providerData.ServerClient
+	r.featureChecker = providerData.FeatureChecker
 }
 
 func (r *PresetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if diags := version.CheckVersionRequirement(r.featureChecker, version.FeaturePresets, "typesense_preset"); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
 	var data PresetResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)

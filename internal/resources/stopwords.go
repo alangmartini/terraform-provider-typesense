@@ -6,6 +6,7 @@ import (
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
+	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -24,7 +25,8 @@ func NewStopwordsSetResource() resource.Resource {
 
 // StopwordsSetResource defines the resource implementation.
 type StopwordsSetResource struct {
-	client *client.ServerClient
+	client         *client.ServerClient
+	featureChecker version.FeatureChecker
 }
 
 // StopwordsSetResourceModel describes the resource data model.
@@ -94,9 +96,15 @@ func (r *StopwordsSetResource) Configure(ctx context.Context, req resource.Confi
 	}
 
 	r.client = providerData.ServerClient
+	r.featureChecker = providerData.FeatureChecker
 }
 
 func (r *StopwordsSetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if diags := version.CheckVersionRequirement(r.featureChecker, version.FeatureStopwords, "typesense_stopwords_set"); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
 	var data StopwordsSetResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
