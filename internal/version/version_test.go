@@ -1,6 +1,7 @@
 package version
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -273,6 +274,36 @@ func TestDefaultFeatureChecker(t *testing.T) {
 		// Future version (v31)
 		{"v31 supports synonym sets", "31.0", FeatureSynonymSets, true},
 		{"v31 does not support per-collection synonyms", "31.0", FeaturePerCollectionSynonyms, false},
+
+		// Conversation models (v26+)
+		{"v25 does not support conversation models", "25.0", FeatureConversationModels, false},
+		{"v26 supports conversation models", "26.0", FeatureConversationModels, true},
+		{"v30 supports conversation models", "30.0", FeatureConversationModels, true},
+
+		// Presets (v27+)
+		{"v26 does not support presets", "26.0", FeaturePresets, false},
+		{"v27 supports presets", "27.0", FeaturePresets, true},
+		{"v30 supports presets", "30.0", FeaturePresets, true},
+
+		// Stopwords (v27+)
+		{"v26 does not support stopwords", "26.0", FeatureStopwords, false},
+		{"v27 supports stopwords", "27.0", FeatureStopwords, true},
+		{"v29 supports stopwords", "29.0", FeatureStopwords, true},
+
+		// Analytics rules (v28+)
+		{"v27 does not support analytics rules", "27.0", FeatureAnalyticsRules, false},
+		{"v28 supports analytics rules", "28.0", FeatureAnalyticsRules, true},
+		{"v30 supports analytics rules", "30.0", FeatureAnalyticsRules, true},
+
+		// NL search models (v29+)
+		{"v28 does not support NL search models", "28.0", FeatureNLSearchModels, false},
+		{"v29 supports NL search models", "29.0", FeatureNLSearchModels, true},
+		{"v30 supports NL search models", "30.0", FeatureNLSearchModels, true},
+
+		// Stemming dictionaries (v29+)
+		{"v28 does not support stemming dictionaries", "28.0", FeatureStemmingDictionaries, false},
+		{"v29 supports stemming dictionaries", "29.0", FeatureStemmingDictionaries, true},
+		{"v30 supports stemming dictionaries", "30.0", FeatureStemmingDictionaries, true},
 	}
 
 	for _, tt := range tests {
@@ -296,6 +327,12 @@ func TestDefaultFeatureCheckerNilVersion(t *testing.T) {
 		FeatureCurationSets,
 		FeaturePerCollectionSynonyms,
 		FeaturePerCollectionOverrides,
+		FeatureConversationModels,
+		FeaturePresets,
+		FeatureStopwords,
+		FeatureAnalyticsRules,
+		FeatureNLSearchModels,
+		FeatureStemmingDictionaries,
 	}
 
 	for _, f := range features {
@@ -328,6 +365,12 @@ func TestFallbackFeatureChecker(t *testing.T) {
 		FeatureCurationSets,
 		FeaturePerCollectionSynonyms,
 		FeaturePerCollectionOverrides,
+		FeatureConversationModels,
+		FeaturePresets,
+		FeatureStopwords,
+		FeatureAnalyticsRules,
+		FeatureNLSearchModels,
+		FeatureStemmingDictionaries,
 	}
 
 	for _, f := range features {
@@ -343,10 +386,130 @@ func TestFallbackFeatureChecker(t *testing.T) {
 
 func TestWellKnownVersions(t *testing.T) {
 	// Verify the well-known versions are correctly initialized
+	if V26_0.Major != 26 || V26_0.Minor != 0 {
+		t.Errorf("V26_0 = %v, want 26.0", V26_0)
+	}
+	if V27_0.Major != 27 || V27_0.Minor != 0 {
+		t.Errorf("V27_0 = %v, want 27.0", V27_0)
+	}
+	if V28_0.Major != 28 || V28_0.Minor != 0 {
+		t.Errorf("V28_0 = %v, want 28.0", V28_0)
+	}
 	if V29_0.Major != 29 || V29_0.Minor != 0 {
 		t.Errorf("V29_0 = %v, want 29.0", V29_0)
 	}
 	if V30_0.Major != 30 || V30_0.Minor != 0 {
 		t.Errorf("V30_0 = %v, want 30.0", V30_0)
+	}
+}
+
+func TestCheckVersionRequirement(t *testing.T) {
+	t.Run("returns error when version is too old", func(t *testing.T) {
+		checker := NewFeatureChecker(MustParse("26.0"))
+		diags := CheckVersionRequirement(checker, FeaturePresets, "typesense_preset")
+		if !diags.HasError() {
+			t.Fatal("expected error diagnostic, got none")
+		}
+		errMsg := diags[0].Detail()
+		if !strings.Contains(errMsg, "v27.0+") {
+			t.Errorf("error should mention required version v27.0+, got: %s", errMsg)
+		}
+		if !strings.Contains(errMsg, "v26.0") {
+			t.Errorf("error should mention current server version v26.0, got: %s", errMsg)
+		}
+		if !strings.Contains(errMsg, "typesense_preset") {
+			t.Errorf("error should mention resource name, got: %s", errMsg)
+		}
+	})
+
+	t.Run("returns nil when version meets requirement", func(t *testing.T) {
+		checker := NewFeatureChecker(MustParse("27.0"))
+		diags := CheckVersionRequirement(checker, FeaturePresets, "typesense_preset")
+		if diags.HasError() {
+			t.Errorf("expected no error, got: %v", diags)
+		}
+	})
+
+	t.Run("returns nil when version exceeds requirement", func(t *testing.T) {
+		checker := NewFeatureChecker(MustParse("30.0"))
+		diags := CheckVersionRequirement(checker, FeaturePresets, "typesense_preset")
+		if diags.HasError() {
+			t.Errorf("expected no error, got: %v", diags)
+		}
+	})
+
+	t.Run("skips check when version is unknown (fallback)", func(t *testing.T) {
+		checker := NewFallbackFeatureChecker()
+		diags := CheckVersionRequirement(checker, FeaturePresets, "typesense_preset")
+		if diags != nil {
+			t.Errorf("expected nil diagnostics for fallback checker, got: %v", diags)
+		}
+	})
+
+	t.Run("skips check when version is nil", func(t *testing.T) {
+		checker := NewFeatureChecker(nil)
+		diags := CheckVersionRequirement(checker, FeaturePresets, "typesense_preset")
+		if diags != nil {
+			t.Errorf("expected nil diagnostics for nil version, got: %v", diags)
+		}
+	})
+
+	t.Run("error message for each feature type", func(t *testing.T) {
+		featureTests := []struct {
+			feature      Feature
+			resource     string
+			tooOld       string
+			wantVersion  string
+		}{
+			{FeatureConversationModels, "typesense_conversation_model", "25.0", "v26.0+"},
+			{FeaturePresets, "typesense_preset", "26.0", "v27.0+"},
+			{FeatureStopwords, "typesense_stopwords_set", "26.0", "v27.0+"},
+			{FeatureAnalyticsRules, "typesense_analytics_rule", "27.0", "v28.0+"},
+			{FeatureNLSearchModels, "typesense_nl_search_model", "28.0", "v29.0+"},
+			{FeatureStemmingDictionaries, "typesense_stemming_dictionary", "28.0", "v29.0+"},
+		}
+
+		for _, tt := range featureTests {
+			t.Run(string(tt.feature), func(t *testing.T) {
+				checker := NewFeatureChecker(MustParse(tt.tooOld))
+				diags := CheckVersionRequirement(checker, tt.feature, tt.resource)
+				if !diags.HasError() {
+					t.Fatal("expected error diagnostic, got none")
+				}
+				errMsg := diags[0].Detail()
+				if !strings.Contains(errMsg, tt.wantVersion) {
+					t.Errorf("error should mention %s, got: %s", tt.wantVersion, errMsg)
+				}
+				if !strings.Contains(errMsg, tt.resource) {
+					t.Errorf("error should mention %s, got: %s", tt.resource, errMsg)
+				}
+			})
+		}
+	})
+}
+
+func TestFeatureMinVersionString(t *testing.T) {
+	tests := []struct {
+		feature Feature
+		want    string
+	}{
+		{FeatureConversationModels, "v26.0+"},
+		{FeaturePresets, "v27.0+"},
+		{FeatureStopwords, "v27.0+"},
+		{FeatureAnalyticsRules, "v28.0+"},
+		{FeatureNLSearchModels, "v29.0+"},
+		{FeatureStemmingDictionaries, "v29.0+"},
+		{FeatureSynonymSets, "v30.0+"},
+		{FeatureCurationSets, "v30.0+"},
+		{FeaturePerCollectionSynonyms, "unknown version"}, // nil min version
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.feature), func(t *testing.T) {
+			got := featureMinVersionString(tt.feature)
+			if got != tt.want {
+				t.Errorf("featureMinVersionString(%s) = %q, want %q", tt.feature, got, tt.want)
+			}
+		})
 	}
 }

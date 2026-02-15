@@ -6,6 +6,7 @@ import (
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
+	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -28,7 +29,8 @@ func NewNLSearchModelResource() resource.Resource {
 
 // NLSearchModelResource defines the resource implementation.
 type NLSearchModelResource struct {
-	client *client.ServerClient
+	client         *client.ServerClient
+	featureChecker version.FeatureChecker
 }
 
 // NLSearchModelResourceModel describes the resource data model.
@@ -179,9 +181,15 @@ func (r *NLSearchModelResource) Configure(ctx context.Context, req resource.Conf
 	}
 
 	r.client = providerData.ServerClient
+	r.featureChecker = providerData.FeatureChecker
 }
 
 func (r *NLSearchModelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if diags := version.CheckVersionRequirement(r.featureChecker, version.FeatureNLSearchModels, "typesense_nl_search_model"); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
 	var data NLSearchModelResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
