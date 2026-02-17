@@ -1,3 +1,12 @@
+# Force bash shell (required when make is invoked from PowerShell/cmd.exe)
+# Use 8.3 short path to avoid spaces in "Program Files"
+ifneq ($(OS),Windows_NT)
+  SHELL := /bin/bash
+else
+  SHELL := C:/PROGRA~1/Git/bin/bash.exe
+endif
+.SHELLFLAGS := -c
+
 .PHONY: test test-acc test-acc-ci test-consistency test-conversation-model \
 	start-typesense stop-typesense build clean wsl-keepalive \
 	testbed-up testbed-down testbed-seed testbed-e2e testbed-verify testbed-clean \
