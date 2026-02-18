@@ -162,7 +162,8 @@ run_migrate() {
         --target-host "${TARGET_HOST}" \
         --target-port "${TARGET_PORT}" \
         --target-protocol "http" \
-        --target-api-key "${TARGET_API_KEY}"
+        --target-api-key "${TARGET_API_KEY}" \
+        --include-documents
 }
 
 verify_migration() {

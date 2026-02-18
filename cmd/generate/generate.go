@@ -103,7 +103,20 @@ Examples:
 	}
 	fmt.Printf("  Output: %s\n", *output)
 	if *includeData {
-		fmt.Printf("  Include data: yes (documents will be exported to data/ subdirectory)\n")
+		fmt.Println()
+		fmt.Println("  ┌─────────────────────────────────────────────────────────────────┐")
+		fmt.Println("  │                        *** WARNING ***                          │")
+		fmt.Println("  │                                                                 │")
+		fmt.Println("  │  --include-data is enabled. ALL documents will be exported to   │")
+		fmt.Println("  │  JSONL files in the data/ subdirectory.                         │")
+		fmt.Println("  │                                                                 │")
+		fmt.Println("  │  If your cluster has millions of documents, this can:            │")
+		fmt.Println("  │    - Take a very long time to complete                          │")
+		fmt.Println("  │    - Produce very large files on disk                           │")
+		fmt.Println("  │    - Use substantial network bandwidth                          │")
+		fmt.Println("  │                                                                 │")
+		fmt.Println("  │  To export schema only (without documents), omit this flag.     │")
+		fmt.Println("  └─────────────────────────────────────────────────────────────────┘")
 	}
 	fmt.Println()
 
