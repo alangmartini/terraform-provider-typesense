@@ -692,7 +692,6 @@ The provider binary includes `generate` and `migrate` commands that work togethe
   --target-api-key=target-api-key \
   --include-documents
 ```
-
 ---
 
 ## Available Resources
