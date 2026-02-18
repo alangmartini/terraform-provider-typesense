@@ -284,52 +284,38 @@ resource "typesense_stopwords_set" "english" {
   stopwords = ["the", "a", "an", "and", "or", "but", "is", "are"]
 }
 
-# Create a search-only API key
+# Create a search-only API key (auto-generated value)
 resource "typesense_api_key" "frontend_search" {
   description = "Frontend search-only key"
   actions     = ["documents:search"]
   collections = [typesense_collection.articles.name]
 }
 
+# Create a key with a specific value (same across prod/staging)
+resource "typesense_api_key" "shared_search" {
+  description = "Shared search key"
+  value       = var.shared_search_key
+  actions     = ["documents:search"]
+  collections = ["*"]
+}
+
+# Create a temporary key that auto-deletes after expiration
+resource "typesense_api_key" "temp_key" {
+  description = "Temporary ingest key"
+  actions     = ["documents:create"]
+  collections = ["*"]
+  expires_at  = 1735689600
+  autodelete  = true
+}
+
 output "search_api_key" {
   value     = typesense_api_key.frontend_search.value
   sensitive = true
 }
-```
 
-### Step 2: Apply
-
-```bash
-# Initialize (downloads provider)
-terraform init
-
-# Preview what will be created
-terraform plan -var="typesense_api_key=YOUR_ADMIN_KEY"
-
-# Apply changes to your cloud cluster
-terraform apply -var="typesense_api_key=YOUR_ADMIN_KEY"
-```
-
-Or use a `.tfvars` file (don't commit this to git):
-
-```hcl
-# terraform.tfvars
-typesense_api_key = "YOUR_ADMIN_KEY"
-```
-
-```bash
-terraform apply
-```
-
-### Step 3: Verify
-
-```bash
-# Check the search API key that was generated
-terraform output -raw search_api_key
-
-# Verify directly against Typesense
-curl "https://xyz.a1.typesense.net/collections" \
-  -H "X-TYPESENSE-API-KEY: YOUR_ADMIN_KEY"
+output "search_key_prefix" {
+  value = typesense_api_key.frontend_search.value_prefix
+}
 ```
 
 ---

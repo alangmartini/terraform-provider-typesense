@@ -43,3 +43,11 @@ variable "conversation_model_name" {
   description = "LLM model to use for conversational search (RAG)"
   default     = "openai/gpt-4o-mini"
 }
+
+# Multi-environment API key
+variable "shared_search_key" {
+  type        = string
+  description = "User-provided search key value for consistent keys across environments (optional)"
+  sensitive   = true
+  default     = ""
+}
