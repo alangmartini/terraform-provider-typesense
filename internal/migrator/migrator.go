@@ -17,11 +17,12 @@ import (
 
 // Config holds the configuration for the migrator
 type Config struct {
-	SourceDir      string
-	TargetHost     string
-	TargetPort     int
-	TargetProtocol string
-	TargetAPIKey   string
+	SourceDir        string
+	TargetHost       string
+	TargetPort       int
+	TargetProtocol   string
+	TargetAPIKey     string
+	IncludeDocuments bool
 }
 
 // Migrator handles importing data to a target Typesense cluster
@@ -80,8 +81,12 @@ func (m *Migrator) Migrate(ctx context.Context) error {
 		// Import documents
 		documentsFile := filepath.Join(dataDir, collectionName+".jsonl")
 		if _, err := os.Stat(documentsFile); err == nil {
-			if err := m.importDocuments(ctx, collectionName, documentsFile); err != nil {
-				return fmt.Errorf("failed to import documents for %s: %w", collectionName, err)
+			if m.config.IncludeDocuments {
+				if err := m.importDocuments(ctx, collectionName, documentsFile); err != nil {
+					return fmt.Errorf("failed to import documents for %s: %w", collectionName, err)
+				}
+			} else {
+				fmt.Printf("  Skipping document import (use --include-documents to import)\n")
 			}
 		} else {
 			fmt.Printf("  No documents file found, skipping data import\n")
