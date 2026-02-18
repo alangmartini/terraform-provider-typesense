@@ -1,103 +1,34 @@
 # Typesense Terraform Provider
 
-A Terraform provider for managing [Typesense](https://typesense.org/) Cloud clusters and server resources. This provider allows you to define and manage your Typesense infrastructure as code.
+A Terraform provider for managing [Typesense](https://typesense.org/) search infrastructure as code. Works with both **Typesense Cloud** and **self-hosted** instances.
 
 ## Table of Contents
 
-- [What is This Project?](#what-is-this-project)
-- [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage Examples](#usage-examples)
+- [Provider Configuration](#provider-configuration)
+- [1. Import from Typesense Cloud into Terraform](#1-import-from-typesense-cloud-into-terraform)
+- [2. Apply Terraform to a Cloud Cluster](#2-apply-terraform-to-a-cloud-cluster)
+- [3. Import from a Local Typesense into Terraform](#3-import-from-a-local-typesense-into-terraform)
+- [4. Apply Terraform to a Local Cluster](#4-apply-terraform-to-a-local-cluster)
+- [5. Keeping Terraform and Your Cluster in Sync](#5-keeping-terraform-and-your-cluster-in-sync)
 - [Available Resources](#available-resources)
-- [How It Works (For Non-Go Developers)](#how-it-works-for-non-go-developers)
+- [Import ID Reference](#import-id-reference)
 - [Development](#development)
-- [Building from Source](#building-from-source)
-
----
-
-## What is This Project?
-
-This is a **Terraform provider** that acts as a bridge between Terraform (infrastructure-as-code tool) and Typesense (a fast, typo-tolerant search engine). It allows you to:
-
-- **Create and manage Typesense Cloud clusters** (infrastructure)
-- **Define search collections** (like database tables/indexes)
-- **Configure search features** (synonyms, search overrides, stopwords)
-- **Manage API keys** with fine-grained permissions
-
-Think of it as a translator: Terraform speaks one language, Typesense speaks another, and this provider translates between them.
-
----
-
-## Project Structure
-
-```
-typesense-terraform/
-│
-├── main.go                          # Entry point - starts the provider plugin
-├── go.mod & go.sum                  # Dependency management (like package.json or requirements.txt)
-│
-├── internal/                        # Core implementation (private to this project)
-│   │
-│   ├── provider/
-│   │   └── provider.go              # Provider configuration & setup
-│   │
-│   ├── client/                      # HTTP clients for Typesense APIs
-│   │   ├── cloud_client.go          # Talks to Cloud Management API (clusters)
-│   │   └── server_client.go         # Talks to Typesense Server API (collections, etc.)
-│   │
-│   ├── types/
-│   │   └── types.go                 # Shared data structures
-│   │
-│   └── resources/                   # Terraform resource implementations
-│       ├── cluster.go               # Cloud cluster management
-│       ├── cluster_config.go        # Cluster configuration changes
-│       ├── collection.go            # Search collections/indexes
-│       ├── synonym.go               # Search synonyms
-│       ├── override.go              # Search result curation
-│       ├── stopwords.go             # Custom stopwords
-│       └── api_key.go               # API key management
-│
-├── examples/                        # Usage examples
-│   ├── complete/                    # Full example with all resources
-│   ├── provider/                    # Provider configuration examples
-│   └── resources/                   # Individual resource examples
-│
-└── docs/                            # Generated documentation
-```
-
-### Key Directories Explained
-
-- **`main.go`**: The program's entry point. When Terraform runs, it starts here.
-- **`internal/`**: Contains all the implementation code. The name "internal" is a Go convention meaning "private to this module."
-- **`internal/client/`**: HTTP clients that make API calls to Typesense services.
-- **`internal/resources/`**: Each file implements one Terraform resource (like `typesense_collection`).
-- **`examples/`**: Sample Terraform configurations showing how to use the provider.
 
 ---
 
 ## Prerequisites
 
-### To Use This Provider
-
 - **Terraform** >= 1.0
-- A **Typesense Cloud account** (for cluster management) OR a **Typesense server** (for server resources)
-- API keys for authentication
-
-### To Build/Develop This Provider
-
-- **Go** >= 1.21
-- **Terraform** >= 1.0 (for testing)
-- Basic understanding of REST APIs
+- A **Typesense Cloud** cluster or a **self-hosted Typesense** server (Docker recommended for local)
+- An **admin API key** with full permissions
 
 ---
 
 ## Installation
 
-### Option 1: From Terraform Registry (When Published)
-
-Add to your Terraform configuration:
+Add the provider to your Terraform configuration:
 
 ```hcl
 terraform {
@@ -111,93 +42,126 @@ terraform {
 ```
 
 Then run:
-```bash
-terraform init
-```
-
-### Option 2: Local Development Build
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd typesense-terraform
-
-# Build the provider binary
-go build -o terraform-provider-typesense
-
-# Create Terraform plugins directory
-mkdir -p ~/.terraform.d/plugins/registry.terraform.io/alanm/typesense/0.1.0/linux_amd64
-
-# Copy the binary
-cp terraform-provider-typesense ~/.terraform.d/plugins/registry.terraform.io/alanm/typesense/0.1.0/linux_amd64/
-
-# In your Terraform project, use it
 terraform init
 ```
 
 ---
 
-## Configuration
+## Provider Configuration
 
-The provider supports **two operational modes**:
+The provider needs to know where your Typesense instance lives. There are two main setups:
 
-### 1. Cloud Management (For Managing Clusters)
+### Cloud Cluster
 
 ```hcl
 provider "typesense" {
-  cloud_management_api_key = "your-cloud-api-key"
+  server_host     = "xyz.a1.typesense.net"   # Your cluster hostname
+  server_api_key  = var.typesense_api_key     # Admin API key
+  server_port     = 443                       # Default for cloud
+  server_protocol = "https"                   # Default for cloud
 }
 ```
 
-### 2. Server API (For Managing Collections, Synonyms, etc.)
+### Local / Self-Hosted
 
 ```hcl
 provider "typesense" {
-  server_host     = "xxx.a1.typesense.net"  # Your cluster hostname
+  server_host     = "localhost"
   server_api_key  = "your-api-key"
-  server_port     = 443                      # Optional, defaults to 443
-  server_protocol = "https"                  # Optional, defaults to "https"
+  server_port     = 8108                      # Default Docker port
+  server_protocol = "http"
 }
 ```
 
-### 3. Combined (Both Modes)
+### Cloud Management API (for managing clusters themselves)
 
 ```hcl
 provider "typesense" {
-  # For cluster management
-  cloud_management_api_key = "your-cloud-api-key"
-
-  # For server resources
-  server_host    = "xxx.a1.typesense.net"
-  server_api_key = "your-api-key"
+  cloud_management_api_key = "your-cloud-management-key"
 }
 ```
 
-### Environment Variables (Alternative)
+### Environment Variables
 
-You can also configure via environment variables:
+All provider settings can be set via environment variables instead:
 
 ```bash
-export TYPESENSE_CLOUD_MANAGEMENT_API_KEY="your-cloud-api-key"
-export TYPESENSE_HOST="xxx.a1.typesense.net"
-export TYPESENSE_API_KEY="your-api-key"
+export TYPESENSE_HOST="xyz.a1.typesense.net"
+export TYPESENSE_API_KEY="your-admin-api-key"
 export TYPESENSE_PORT="443"
 export TYPESENSE_PROTOCOL="https"
+export TYPESENSE_CLOUD_MANAGEMENT_API_KEY="your-cloud-key"
 ```
 
-**Precedence**: Terraform configuration > Environment variables > Default values
+**Precedence:** Terraform config > Environment variables > Default values
 
 ---
 
-## Usage Examples
+## 1. Import from Typesense Cloud into Terraform
 
-### Example 1: Create a Search Collection
+> **Goal:** You have an existing Typesense Cloud cluster with collections, synonyms, overrides, etc., and you want to manage it with Terraform going forward.
+
+### Option A: Bulk Export with `generate` (Recommended)
+
+The provider binary includes a `generate` command that reads all resources from your cluster and creates `.tf` files and import scripts automatically.
+
+```bash
+# Build the provider binary (if using from source)
+go build -o terraform-provider-typesense .
+
+# Export everything from your cloud cluster
+./terraform-provider-typesense generate \
+  --host=xyz.a1.typesense.net \
+  --port=443 \
+  --protocol=https \
+  --api-key=YOUR_ADMIN_API_KEY \
+  --output=./my-typesense-config
+```
+
+This creates two files:
+
+| File | Contents |
+|------|----------|
+| `my-typesense-config/main.tf` | All resources as Terraform configuration |
+| `my-typesense-config/imports.sh` | `terraform import` commands for every resource |
+
+Now bring everything into Terraform state:
+
+```bash
+cd my-typesense-config
+
+# Review the generated config
+cat main.tf
+
+# Initialize Terraform
+terraform init
+
+# Import all existing resources into state
+chmod +x imports.sh
+./imports.sh
+
+# Verify: should show "No changes"
+terraform plan
+```
+
+### Option B: Import Individual Resources
+
+If you only want to manage specific resources, write the `.tf` definition first, then import:
 
 ```hcl
+# main.tf
+provider "typesense" {
+  server_host     = "xyz.a1.typesense.net"
+  server_api_key  = var.typesense_api_key
+  server_port     = 443
+  server_protocol = "https"
+}
+
 resource "typesense_collection" "products" {
   name = "products"
 
-  # Define schema fields (like database columns)
   field {
     name = "id"
     type = "string"
@@ -206,30 +170,19 @@ resource "typesense_collection" "products" {
   field {
     name  = "title"
     type  = "string"
-    facet = true     # Enable faceting for filtering
-    index = true     # Index for full-text search
+    facet = true
+    index = true
   }
 
   field {
     name = "price"
     type = "float"
-    sort = true      # Allow sorting by this field
-  }
-
-  field {
-    name     = "tags"
-    type     = "string[]"  # Array of strings
-    facet    = true
-    optional = true        # Field is optional
+    sort = true
   }
 
   default_sorting_field = "price"
 }
-```
 
-### Example 2: Add Search Synonyms
-
-```hcl
 resource "typesense_synonym" "shoe_synonyms" {
   collection = typesense_collection.products.name
   name       = "shoe-synonyms"
@@ -237,100 +190,58 @@ resource "typesense_synonym" "shoe_synonyms" {
 }
 ```
 
-### Example 3: Create Search Override (Curated Results)
+Then import each resource:
 
-```hcl
-resource "typesense_override" "featured_products" {
-  collection = typesense_collection.products.name
-  name       = "featured-iphone"
+```bash
+terraform init
 
-  # When user searches for "iphone"
-  rule {
-    query = "iphone"
-    match = "exact"
-  }
+# Import the collection
+terraform import typesense_collection.products products
 
-  # Pin these documents to the top
-  includes {
-    id       = "product-123"
-    position = 1
-  }
+# Import the synonym (format: collection/synonym_name)
+terraform import typesense_synonym.shoe_synonyms products/shoe-synonyms
 
-  includes {
-    id       = "product-456"
-    position = 2
-  }
-
-  # Hide these documents from results
-  excludes {
-    id = "product-outdated"
-  }
-}
+# Verify everything matches
+terraform plan
 ```
 
-### Example 4: Manage API Keys
+If `terraform plan` shows differences, update your `.tf` file to match the actual cloud state, then run `terraform plan` again until it shows "No changes."
+
+---
+
+## 2. Apply Terraform to a Cloud Cluster
+
+> **Goal:** You have Terraform files defining your search configuration and you want to create or update resources on a Typesense Cloud cluster.
+
+### Step 1: Write Your Configuration
 
 ```hcl
-resource "typesense_api_key" "search_only_key" {
-  description = "Frontend search-only key"
-  actions     = ["documents:search"]
-  collections = [typesense_collection.products.name]
-  expires_at  = 0  # Never expires (use Unix timestamp for expiration)
-}
-
-# Use the generated key (sensitive value)
-output "search_api_key" {
-  value     = typesense_api_key.search_only_key.value
-  sensitive = true
-}
-```
-
-### Example 5: Create a Cloud Cluster
-
-```hcl
-resource "typesense_cluster" "production" {
-  name                    = "prod-cluster"
-  memory                  = "4_gb"
-  vcpu                    = "2_vcpus"
-  high_availability       = true
-  typesense_server_version = "27.1"
-
-  regions = ["us-east-1"]
-
-  search_delivery_network = true
-  auto_upgrade_capacity   = true
-}
-
-# Output cluster details
-output "cluster_hostname" {
-  value = typesense_cluster.production.load_balanced_hostname
-}
-
-output "admin_key" {
-  value     = typesense_cluster.production.admin_api_key
-  sensitive = true
-}
-```
-
-### Example 6: Complete Workflow
-
-```hcl
+# main.tf
 terraform {
   required_providers {
     typesense = {
-      source = "alanm/typesense"
+      source  = "alanm/typesense"
+      version = "~> 0.1"
     }
   }
 }
 
-provider "typesense" {
-  server_host    = "my-cluster.a1.typesense.net"
-  server_api_key = var.admin_api_key
+variable "typesense_api_key" {
+  type      = string
+  sensitive = true
 }
 
-# 1. Create collection
+provider "typesense" {
+  server_host     = "xyz.a1.typesense.net"
+  server_api_key  = var.typesense_api_key
+  server_port     = 443
+  server_protocol = "https"
+}
+
+# Define a collection
 resource "typesense_collection" "articles" {
-  name = "articles"
+  name                 = "articles"
+  enable_nested_fields = true
 
   field {
     name = "id"
@@ -344,9 +255,9 @@ resource "typesense_collection" "articles" {
   }
 
   field {
-    name  = "content"
+    name  = "category"
     type  = "string"
-    index = true
+    facet = true
   }
 
   field {
@@ -358,351 +269,361 @@ resource "typesense_collection" "articles" {
   default_sorting_field = "published_at"
 }
 
-# 2. Add synonyms
+# Add synonyms
 resource "typesense_synonym" "tech_terms" {
   collection = typesense_collection.articles.name
   name       = "tech-synonyms"
   synonyms   = ["javascript", "js", "ecmascript"]
 }
 
-# 3. Add stopwords
+# Add stopwords
 resource "typesense_stopwords_set" "english" {
-  name      = "english-stopwords"
+  name      = "english-common"
   locale    = "en"
-  stopwords = ["the", "a", "an", "and", "or", "but"]
+  stopwords = ["the", "a", "an", "and", "or", "but", "is", "are"]
 }
 
-# 4. Create search-only API key
-resource "typesense_api_key" "public_search" {
-  description = "Public search key"
+# Create a search-only API key
+resource "typesense_api_key" "frontend_search" {
+  description = "Frontend search-only key"
   actions     = ["documents:search"]
   collections = [typesense_collection.articles.name]
 }
+
+output "search_api_key" {
+  value     = typesense_api_key.frontend_search.value
+  sensitive = true
+}
+```
+
+### Step 2: Apply
+
+```bash
+# Initialize (downloads provider)
+terraform init
+
+# Preview what will be created
+terraform plan -var="typesense_api_key=YOUR_ADMIN_KEY"
+
+# Apply changes to your cloud cluster
+terraform apply -var="typesense_api_key=YOUR_ADMIN_KEY"
+```
+
+Or use a `.tfvars` file (don't commit this to git):
+
+```hcl
+# terraform.tfvars
+typesense_api_key = "YOUR_ADMIN_KEY"
+```
+
+```bash
+terraform apply
+```
+
+### Step 3: Verify
+
+```bash
+# Check the search API key that was generated
+terraform output -raw search_api_key
+
+# Verify directly against Typesense
+curl "https://xyz.a1.typesense.net/collections" \
+  -H "X-TYPESENSE-API-KEY: YOUR_ADMIN_KEY"
 ```
 
 ---
 
-## Exporting and Migrating Configuration
+## 3. Import from a Local Typesense into Terraform
 
-The provider includes a CLI command to export existing Typesense configuration to Terraform files. This is useful for:
+> **Goal:** You have a local Typesense instance (e.g., Docker) with existing resources, and you want to capture them as Terraform code.
 
-- **Adopting Terraform** for an existing Typesense cluster
-- **Migrating configuration** from one cluster to another
-- **Backing up** your Typesense schema and settings
-- **Cloning environments** (e.g., production → staging)
-
-### Generate Command
-
-Export configuration from an existing Typesense cluster:
+### Start Your Local Typesense (if not running)
 
 ```bash
-# Build the provider binary first
-go build -o terraform-provider-typesense
+docker run -d \
+  --name typesense \
+  -p 8108:8108 \
+  -v typesense-data:/data \
+  typesense/typesense:27.1 \
+  --data-dir=/data \
+  --api-key=test-api-key
+```
 
-# Export from a Typesense Cloud cluster
-./terraform-provider-typesense generate \
-  --host=your-cluster.a1.typesense.net \
-  --port=443 \
-  --protocol=https \
-  --api-key=your-admin-api-key \
-  --output=./exported
+### Option A: Bulk Export with `generate`
 
-# Export from a self-hosted Typesense server
+```bash
 ./terraform-provider-typesense generate \
   --host=localhost \
   --port=8108 \
   --protocol=http \
-  --api-key=your-api-key \
-  --output=./exported
+  --api-key=test-api-key \
+  --output=./local-config
 ```
 
-### Generated Files
-
-The command creates two files in the output directory:
-
-| File | Purpose |
-|------|---------|
-| `main.tf` | Terraform configuration with all exported resources |
-| `imports.sh` | Shell script with `terraform import` commands |
-
-### Migration Workflow: Step by Step
-
-#### Step 1: Export from Source Cluster
+Then import into Terraform state:
 
 ```bash
-./terraform-provider-typesense generate \
-  --host=source-cluster.a1.typesense.net \
-  --port=443 \
-  --protocol=https \
-  --api-key=SOURCE_ADMIN_API_KEY \
-  --output=./exported
+cd local-config
+terraform init
+chmod +x imports.sh
+./imports.sh
+terraform plan   # Should show "No changes"
 ```
 
-#### Step 2: Review Generated Configuration
+### Option B: Import Individual Resources
 
-```bash
-cd ./exported
-cat main.tf
-```
-
-The generated `main.tf` includes:
-- Provider configuration block
-- All collections with their schemas
-- Synonyms (per-collection for Typesense ≤29, or synonym_sets for v30+)
-- Overrides/curations
-- Stopwords sets
-- API keys (with placeholder values - see note below)
-
-**Important Notes:**
-- API key values are **not exported** (they're secrets). The generated config uses placeholders.
-- Review the configuration and adjust any values as needed for your target environment.
-
-#### Step 3: Configure for Target Cluster
-
-Edit `main.tf` to point to your target cluster:
+Write your `.tf` file pointing at localhost:
 
 ```hcl
+# main.tf
 provider "typesense" {
-  server_host     = "target-cluster.a1.typesense.net"  # Change this
-  server_api_key  = "TARGET_ADMIN_API_KEY"              # Change this
-  server_port     = 443
-  server_protocol = "https"
+  server_host     = "localhost"
+  server_api_key  = "test-api-key"
+  server_port     = 8108
+  server_protocol = "http"
+}
+
+resource "typesense_collection" "products" {
+  name = "products"
+
+  field {
+    name = "id"
+    type = "string"
+  }
+
+  field {
+    name  = "name"
+    type  = "string"
+    index = true
+  }
 }
 ```
 
-Or use environment variables:
-
-```bash
-export TYPESENSE_HOST="target-cluster.a1.typesense.net"
-export TYPESENSE_API_KEY="TARGET_ADMIN_API_KEY"
-```
-
-#### Step 4: Initialize Terraform
+Import the existing resource:
 
 ```bash
 terraform init
-```
-
-#### Step 5: Choose Your Approach
-
-**Option A: Fresh Creation (New/Empty Cluster)**
-
-If the target cluster is empty, simply apply the configuration:
-
-```bash
-terraform plan    # Review what will be created
-terraform apply   # Create all resources
-```
-
-**Option B: Import Existing Resources (Target Has Existing Data)**
-
-If the target cluster already has some resources that match, import them first:
-
-```bash
-# Make the import script executable
-chmod +x imports.sh
-
-# Run the import commands
-./imports.sh
-```
-
-The `imports.sh` script contains commands like:
-
-```bash
 terraform import typesense_collection.products products
-terraform import typesense_synonym.products_shoe_synonyms products/shoe-synonyms
-terraform import typesense_stopwords_set.english english-stopwords
-# ... etc
-```
-
-After importing, verify the state matches:
-
-```bash
-terraform plan  # Should show no changes if everything matches
-```
-
-#### Step 6: Ongoing Management
-
-After the initial setup, manage your Typesense configuration through Terraform:
-
-```bash
-# Make changes in main.tf, then:
-terraform plan   # Preview changes
-terraform apply  # Apply changes
-```
-
-### Complete Migration Example
-
-```bash
-# 1. Build the provider
-go build -o terraform-provider-typesense
-
-# 2. Export from production
-./terraform-provider-typesense generate \
-  --host=prod-cluster.a1.typesense.net \
-  --port=443 \
-  --protocol=https \
-  --api-key=$PROD_API_KEY \
-  --output=./staging-config
-
-# 3. Navigate to exported config
-cd ./staging-config
-
-# 4. Update provider to point to staging
-sed -i 's/prod-cluster/staging-cluster/g' main.tf
-# Or manually edit main.tf
-
-# 5. Set staging API key
-export TYPESENSE_API_KEY="$STAGING_API_KEY"
-
-# 6. Initialize and apply
-terraform init
 terraform plan
-terraform apply
 ```
 
-### Typesense Version Compatibility
-
-The generate command automatically handles API differences between Typesense versions:
-
-| Feature | Typesense ≤29 | Typesense 30+ |
-|---------|---------------|---------------|
-| Synonyms | Per-collection (`/collections/{name}/synonyms`) | System-level (`/synonym_sets`) |
-| Overrides | Per-collection (`/collections/{name}/overrides`) | System-level (`/curation_sets`) |
-
-The generated configuration will include comments noting which API version was detected.
-
-### Troubleshooting
-
-**"Not Found" errors during generate:**
-- Verify your API key has admin permissions
-- Check the host, port, and protocol are correct
-- For Typesense Cloud, use port 443 and protocol https
-
-**Import fails with "resource already exists":**
-- The resource is already in Terraform state
-- Remove it from state first: `terraform state rm <resource_address>`
-
-**Plan shows unexpected changes after import:**
-- Some computed fields may differ between source and target
-- Review and update the configuration to match your target cluster's reality
+Adjust your `.tf` until `terraform plan` shows no differences.
 
 ---
 
-## Cluster-to-Cluster Migration
+## 4. Apply Terraform to a Local Cluster
 
-The provider includes built-in commands for migrating collections and documents between Typesense clusters. This is useful for:
+> **Goal:** You have Terraform files and want to create resources on a local Typesense instance.
 
-- **Migrating to a new cluster** (e.g., upgrading infrastructure)
-- **Cloning environments** (e.g., production → staging)
-- **Disaster recovery** (backup and restore)
-
-### Migration Workflow
-
-#### Step 1: Export from Source Cluster
-
-Use the `generate` command with `--include-data` to export both configuration and documents:
+### Step 1: Start a Local Typesense
 
 ```bash
-./terraform-provider-typesense generate \
-  --host=source-cluster.a1.typesense.net \
-  --port=443 \
-  --protocol=https \
-  --api-key=$SOURCE_API_KEY \
-  --include-data \
-  --output=./migration
+docker run -d \
+  --name typesense \
+  -p 8108:8108 \
+  -v typesense-data:/data \
+  typesense/typesense:27.1 \
+  --data-dir=/data \
+  --api-key=test-api-key
 ```
 
-This creates:
+### Step 2: Write Your Configuration
 
+```hcl
+# main.tf
+terraform {
+  required_providers {
+    typesense = {
+      source  = "alanm/typesense"
+      version = "~> 0.1"
+    }
+  }
+}
+
+provider "typesense" {
+  server_host     = "localhost"
+  server_api_key  = "test-api-key"
+  server_port     = 8108
+  server_protocol = "http"
+}
+
+resource "typesense_collection" "products" {
+  name = "products"
+
+  field {
+    name = "id"
+    type = "string"
+  }
+
+  field {
+    name  = "name"
+    type  = "string"
+    index = true
+    facet = true
+  }
+
+  field {
+    name = "price"
+    type = "float"
+    sort = true
+  }
+
+  default_sorting_field = "price"
+}
+
+resource "typesense_synonym" "shoe_synonyms" {
+  collection = typesense_collection.products.name
+  name       = "shoe-synonyms"
+  synonyms   = ["shoe", "sneaker", "trainer"]
+}
+
+resource "typesense_override" "featured" {
+  collection = typesense_collection.products.name
+  name       = "featured-product"
+
+  rule {
+    query = "best"
+    match = "exact"
+  }
+
+  includes {
+    id       = "product-1"
+    position = 1
+  }
+}
 ```
-./migration/
-├── main.tf              # Terraform configuration
-├── imports.sh           # Import commands for Terraform state
-└── data/
-    ├── products.schema.json    # Collection schema
-    ├── products.jsonl          # Document data (JSONL format)
-    ├── orders.schema.json
-    └── orders.jsonl
-```
 
-#### Step 2: Import to Target Cluster
-
-Use the `migrate` command to import everything to the target:
+### Step 3: Apply
 
 ```bash
-./terraform-provider-typesense migrate \
-  --source-dir=./migration \
-  --target-host=target-cluster.a1.typesense.net \
-  --target-port=443 \
-  --target-protocol=https \
-  --target-api-key=$TARGET_API_KEY
+terraform init
+terraform plan    # Preview
+terraform apply   # Create resources locally
 ```
 
-The migrate command:
-1. Creates collections on the target (if they don't exist)
-2. Streams documents from JSONL files using chunked transfer
-3. Reports success/failure counts for each collection
-
-### Migrate Command Options
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--source-dir` | (required) | Directory containing exported data |
-| `--target-host` | (required) | Target cluster hostname |
-| `--target-api-key` | (required) | Target cluster admin API key |
-| `--target-port` | `8108` | Target cluster port |
-| `--target-protocol` | `http` | Target cluster protocol (http/https) |
-
-### Example: Full Migration
+### Step 4: Verify
 
 ```bash
-# 1. Build the provider
-go build -o terraform-provider-typesense
+# List collections
+curl "http://localhost:8108/collections" \
+  -H "X-TYPESENSE-API-KEY: test-api-key"
 
-# 2. Export from production (config + data)
-./terraform-provider-typesense generate \
-  --host=prod.typesense.net --port=443 --protocol=https \
-  --api-key=$PROD_API_KEY \
-  --include-data \
-  --output=./prod-backup
-
-# 3. Import to staging
-./terraform-provider-typesense migrate \
-  --source-dir=./prod-backup \
-  --target-host=staging.typesense.net --target-port=443 --target-protocol=https \
-  --target-api-key=$STAGING_API_KEY
+# Check synonyms
+curl "http://localhost:8108/collections/products/synonyms" \
+  -H "X-TYPESENSE-API-KEY: test-api-key"
 ```
 
-### Memory Efficiency
+---
 
-Both export and import operations use streaming to handle large collections without loading everything into memory:
+## 5. Keeping Terraform and Your Cluster in Sync
 
-- **Export**: Documents are streamed directly from the API to JSONL files
-- **Import**: Documents are streamed from JSONL files to the target API
+Over time, your Terraform state can drift from the actual cluster state (e.g., someone makes a change directly via the API). Here's how to detect and fix drift.
 
-This allows migrating collections with millions of documents without running out of memory.
+### Key Commands
 
-### Troubleshooting Migration
+| Command | What It Does |
+|---------|--------------|
+| `terraform plan` | Compares your `.tf` files against current state, shows what would change |
+| `terraform refresh` | Updates Terraform state to match the real cluster (without changing anything) |
+| `terraform apply` | Pushes your `.tf` definitions to the cluster, making it match |
+| `terraform import` | Brings an existing resource into state so Terraform can manage it |
 
-**"data directory not found" error:**
-- Ensure you ran `generate` with `--include-data` flag
-- Check that the `--source-dir` path is correct
+### Example: Keeping a Cloud Cluster in Sync
 
-**Collection already exists on target:**
-- The migrate command skips collection creation if it already exists
-- Documents are upserted (updated or inserted)
+Suppose someone added a new synonym directly via the Typesense API and modified a stopwords set.
 
-**Some documents failed to import:**
-- Check the console output for failure counts
-- Common causes: schema mismatch, invalid document format
-- Verify the target collection schema matches the source
+**Detect drift:**
+
+```bash
+# Refresh state from the actual cloud cluster
+terraform refresh -var="typesense_api_key=YOUR_ADMIN_KEY"
+
+# See what's different between your .tf and the cluster
+terraform plan -var="typesense_api_key=YOUR_ADMIN_KEY"
+```
+
+The plan output tells you exactly what differs:
+
+```
+~ typesense_stopwords_set.english will be updated in-place
+  ~ stopwords = ["the", "a", "an"] -> ["the", "a", "an", "and", "or"]
+```
+
+**Choose how to resolve:**
+
+- **Keep Terraform as source of truth** (revert the manual change):
+  ```bash
+  terraform apply -var="typesense_api_key=YOUR_ADMIN_KEY"
+  ```
+  This pushes your `.tf` config back to the cluster, overwriting the manual change.
+
+- **Accept the manual change** (update your `.tf` to match):
+  Edit your `.tf` file to include the new stopwords, then verify:
+  ```bash
+  terraform plan   # Should now show "No changes"
+  ```
+
+- **Import the new synonym** that was created outside Terraform:
+  Add a resource block for it in your `.tf`:
+  ```hcl
+  resource "typesense_synonym" "new_manual_synonym" {
+    collection = typesense_collection.products.name
+    name       = "manually-added-synonym"
+    synonyms   = ["laptop", "notebook", "computer"]
+  }
+  ```
+  Then import it:
+  ```bash
+  terraform import typesense_synonym.new_manual_synonym products/manually-added-synonym
+  terraform plan   # Should show "No changes"
+  ```
+
+### Example: Keeping a Local Cluster in Sync
+
+Same workflow, just with local connection settings.
+
+**Detect drift:**
+
+```bash
+terraform refresh
+terraform plan
+```
+
+**Resolve by applying Terraform as the source of truth:**
+
+```bash
+terraform apply
+```
+
+**Or update Terraform to match what's on the local instance:**
+
+```bash
+# See what the cluster actually has
+curl "http://localhost:8108/collections" \
+  -H "X-TYPESENSE-API-KEY: test-api-key" | jq .
+
+# Update your .tf files to match, then verify
+terraform plan   # Should show "No changes"
+```
+
+### Recommended Sync Workflow
+
+1. **Never make manual API changes in production.** Always go through Terraform.
+2. Run `terraform plan` in CI on every PR to catch config drift early.
+3. If manual changes are unavoidable, immediately import them into Terraform:
+   ```bash
+   # Add the resource block to .tf
+   # Then import
+   terraform import <resource_type>.<name> <import_id>
+   terraform plan  # Verify no drift
+   ```
+4. Use `terraform refresh` before `plan` if you suspect out-of-band changes.
 
 ---
 
 ## Available Resources
 
-### Cloud Management Resources
+### Cloud Management
 
 | Resource | Purpose |
 |----------|---------|
@@ -713,171 +634,81 @@ This allows migrating collections with millions of documents without running out
 
 | Resource | Purpose |
 |----------|---------|
-| `typesense_collection` | Define search collections with schema |
-| `typesense_synonym` | Configure search synonyms |
-| `typesense_override` | Curate search results (pin/hide documents) |
-| `typesense_stopwords_set` | Define custom stopwords |
-| `typesense_api_key` | Manage API keys with granular permissions |
+| `typesense_collection` | Search collections with typed schemas |
+| `typesense_collection_alias` | Stable aliases pointing to collections |
+| `typesense_synonym` | Search term synonyms (multi-way or one-way) |
+| `typesense_override` | Search result curations (pin/hide documents) |
+| `typesense_stopwords_set` | Custom stopword lists |
+| `typesense_preset` | Saved search parameter presets |
+| `typesense_analytics_rule` | Analytics event collection rules |
+| `typesense_api_key` | API keys with granular permissions |
+| `typesense_stemming_dictionary` | Language-specific stemming rules |
+| `typesense_nl_search_model` | Natural language search models (requires OpenAI key) |
+| `typesense_conversation_model` | Conversational search / RAG models (requires OpenAI key) |
 
-### Detailed Resource Documentation
+---
 
-For detailed documentation on each resource, see the [`examples/resources/`](examples/resources/) directory or run:
+## Import ID Reference
 
-```bash
-terraform providers schema -json
-```
+Each resource type uses a specific ID format for `terraform import`:
+
+| Resource | Import ID Format | Example |
+|----------|------------------|---------|
+| `typesense_collection` | `{name}` | `terraform import typesense_collection.x products` |
+| `typesense_collection_alias` | `{alias_name}` | `terraform import typesense_collection_alias.x music` |
+| `typesense_synonym` | `{collection}/{synonym_name}` | `terraform import typesense_synonym.x products/shoe-synonyms` |
+| `typesense_override` | `{collection}/{override_name}` | `terraform import typesense_override.x products/featured` |
+| `typesense_stopwords_set` | `{set_name}` | `terraform import typesense_stopwords_set.x english` |
+| `typesense_preset` | `{preset_name}` | `terraform import typesense_preset.x track-listing` |
+| `typesense_analytics_rule` | `{rule_name}` | `terraform import typesense_analytics_rule.x popular-queries` |
+| `typesense_api_key` | `{key_id}` | `terraform import typesense_api_key.x 123` |
+| `typesense_stemming_dictionary` | `{dictionary_id}` | `terraform import typesense_stemming_dictionary.x english` |
+| `typesense_cluster` | `{cluster_id}` | `terraform import typesense_cluster.x abc123` |
+| `typesense_nl_search_model` | `{model_id}` | `terraform import typesense_nl_search_model.x music-nl` |
+| `typesense_conversation_model` | `{model_id}` | `terraform import typesense_conversation_model.x rag-model` |
 
 ---
 
 ## Development
 
-### Running Locally
-
-1. **Build the provider**:
-   ```bash
-   go build -o terraform-provider-typesense
-   ```
-
-2. **Install locally** (Linux/macOS):
-   ```bash
-   mkdir -p ~/.terraform.d/plugins/registry.terraform.io/alanm/typesense/0.1.0/linux_amd64
-   cp terraform-provider-typesense ~/.terraform.d/plugins/registry.terraform.io/alanm/typesense/0.1.0/linux_amd64/
-   ```
-
-3. **Test with Terraform**:
-   ```bash
-   cd examples/complete
-   terraform init
-   terraform plan
-   terraform apply
-   ```
-
-### Adding a New Resource
-
-1. Create a new file in `internal/resources/` (e.g., `my_resource.go`)
-2. Implement the `Resource` interface:
-   - `Metadata()` - resource type name
-   - `Schema()` - define attributes
-   - `Create()`, `Read()`, `Update()`, `Delete()` - CRUD operations
-   - `Configure()` - get client from provider
-3. Register the resource in `internal/provider/provider.go`:
-   ```go
-   func (p *TypesenseProvider) Resources(ctx context.Context) []func() resource.Resource {
-       return []func() resource.Resource{
-           // Existing resources...
-           resources.NewMyResource,  // Add your resource
-       }
-   }
-   ```
-4. Add an example in `examples/resources/typesense_my_resource/`
-
-### Project Dependencies
-
-Key libraries used:
-
-- **terraform-plugin-framework**: The official Terraform plugin SDK
-- **net/http**: Go's standard HTTP client library (no external HTTP library needed)
-- **encoding/json**: JSON encoding/decoding (built-in)
-- **context**: Request lifecycle management (built-in)
-
----
-
-## Building from Source
-
-### Requirements
-
-- Go 1.21 or higher
-- Git
-
-### Steps
+### Building from Source
 
 ```bash
-# Clone repository
-git clone <repository-url>
-cd typesense-terraform
-
-# Download dependencies
-go mod download
-
-# Build binary
-go build -o terraform-provider-typesense
-
-# Verify build
-./terraform-provider-typesense --version
+git clone https://github.com/alanm/terraform-provider-typesense.git
+cd terraform-provider-typesense
+go build -o terraform-provider-typesense .
 ```
 
-### For Release (Cross-Platform)
+### Running the Chinook Acceptance Tests
 
-Using GoReleaser (if configured):
+The `examples/chinook/` directory is the primary acceptance test suite:
 
 ```bash
-goreleaser release --snapshot --clean
+make chinook-test     # Full cycle: start Typesense, apply, verify, cleanup
+make chinook-apply    # Apply only (assumes Typesense is running)
+make chinook-destroy  # Tear down chinook resources
 ```
 
-Or manually for multiple platforms:
+### CLI Commands
+
+The provider binary also works as a standalone CLI:
 
 ```bash
-# Linux
-GOOS=linux GOARCH=amd64 go build -o terraform-provider-typesense_linux_amd64
-
-# macOS
-GOOS=darwin GOARCH=amd64 go build -o terraform-provider-typesense_darwin_amd64
-GOOS=darwin GOARCH=arm64 go build -o terraform-provider-typesense_darwin_arm64
-
-# Windows
-GOOS=windows GOARCH=amd64 go build -o terraform-provider-typesense_windows_amd64.exe
+./terraform-provider-typesense generate --help    # Export cluster config to .tf files
+./terraform-provider-typesense migrate --help     # Migrate documents between clusters
+./terraform-provider-typesense version            # Print version
 ```
-
----
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. **Create a feature branch** for your work (see `CLAUDE.md` for git workflow)
-2. **Make atomic commits** (one logical change per commit)
-3. **Test your changes** locally with Terraform
-4. **Update examples** if adding new features
-5. **Submit a pull request**
 
 ---
 
 ## License
 
-This project is licensed under the MPL-2.0 License.
+MPL-2.0
 
 ---
 
-## Resources
+## Links
 
 - [Typesense Documentation](https://typesense.org/docs/)
-- [Typesense Cloud API](https://cloud.typesense.org/docs/)
+- [Typesense Cloud](https://cloud.typesense.org/)
 - [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework)
-- [Go Programming Language](https://go.dev/doc/)
-
----
-
-## Support
-
-For issues and questions:
-- Open an issue in the GitHub repository
-- Check existing examples in the `examples/` directory
-- Consult Typesense and Terraform documentation
-
----
-
-**Happy Infrastructure-as-Coding!**
-
-# Testing end to end migration
-
-  Make Targets Workflow                                                                                                                                    
-                                                                                                                                                           
-  # Full E2E test (does everything below automatically)                                                                                                    
-  make testbed-e2e                                                                                                                                         
-                                                                                                                                                           
-  # Manual step-by-step:                                                                                                                                   
-  make testbed-up      # 1. Start Docker containers                                                                                                        
-  make testbed-seed    # 2. Populate source with data                                                                                                      
-  # ... run your migration ...                                                                                                                             
-  make testbed-verify  # 3. Compare source vs target                                                                                                       
-  make testbed-down    # 4. Clean up  
