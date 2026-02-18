@@ -22,6 +22,12 @@ Once the goal is clear, break the work into an ordered list of concrete steps:
 
 **Apply this to every task** — features, bug fixes, refactors, and investigations alike. When the goal is ambiguous, ask the user to clarify before planning steps. When the steps reveal the goal was incomplete, revisit the goal definition.
 
+## Documentation
+
+- **All user-facing changes MUST be documented in `README.md`** — new features, new CLI flags, changed defaults, new resources, and workflow changes.
+- When updating CLI commands (e.g., `generate`, `migrate`), update both the relevant usage sections and the **CLI Commands** table in the README.
+- Keep documentation in sync with code — if a PR changes behavior, the README update should be part of the same PR.
+
 ## Git Workflow
 
 - **Always create a new branch when starting work** on a feature or fix. Use descriptive branch names that reflect the work being done.

@@ -12,6 +12,7 @@ A Terraform provider for managing [Typesense](https://typesense.org/) search inf
 - [3. Import from a Local Typesense into Terraform](#3-import-from-a-local-typesense-into-terraform)
 - [4. Apply Terraform to a Local Cluster](#4-apply-terraform-to-a-local-cluster)
 - [5. Keeping Terraform and Your Cluster in Sync](#5-keeping-terraform-and-your-cluster-in-sync)
+- [6. Cluster-to-Cluster Migration](#6-cluster-to-cluster-migration)
 - [Available Resources](#available-resources)
 - [Import ID Reference](#import-id-reference)
 - [Development](#development)
@@ -621,6 +622,78 @@ terraform plan   # Should show "No changes"
 
 ---
 
+## 6. Cluster-to-Cluster Migration
+
+> **Goal:** You want to migrate collections (and optionally documents) from one Typesense cluster to another — for example, from a production cloud cluster to a staging environment, or between two self-hosted instances.
+
+The provider binary includes `generate` and `migrate` commands that work together for cluster-to-cluster migration.
+
+### Step 1: Export from Source Cluster
+
+```bash
+# Schema only (collections, synonyms, overrides, stopwords)
+./terraform-provider-typesense generate \
+  --host=source.typesense.net --port=443 --protocol=https \
+  --api-key=SOURCE_API_KEY \
+  --output=./migration
+
+# Schema + documents (use --include-data to export document JSONL files)
+./terraform-provider-typesense generate \
+  --host=source.typesense.net --port=443 --protocol=https \
+  --api-key=SOURCE_API_KEY \
+  --include-data \
+  --output=./migration
+```
+
+### Step 2: Import to Target Cluster
+
+```bash
+# Schema only (default — safe for any cluster size)
+./terraform-provider-typesense migrate \
+  --source-dir=./migration \
+  --target-host=target.typesense.net --target-port=443 --target-protocol=https \
+  --target-api-key=TARGET_API_KEY
+
+# Schema + documents (opt-in via --include-documents)
+./terraform-provider-typesense migrate \
+  --source-dir=./migration \
+  --target-host=target.typesense.net --target-port=443 --target-protocol=https \
+  --target-api-key=TARGET_API_KEY \
+  --include-documents
+```
+
+> **WARNING: `--include-documents` imports ALL document data from the exported JSONL files.**
+> If your source cluster has millions of documents, this can take a very long time, consume significant disk space on the target, and use substantial network bandwidth. Only use this flag when you explicitly need to copy document data. Omit it to migrate schema only.
+
+### What Gets Migrated
+
+| Data | `generate` flag | `migrate` flag | Default |
+|------|----------------|----------------|---------|
+| Collection schemas | Always | Always | Yes |
+| Synonyms | Always | Always | Yes |
+| Overrides (curations) | Always | Always | Yes |
+| Stopwords sets | Always | Always | Yes |
+| **Documents** | `--include-data` | `--include-documents` | **No** |
+
+### Migration Between Local Clusters
+
+```bash
+# Export from local source (port 8108)
+./terraform-provider-typesense generate \
+  --host=localhost --port=8108 --protocol=http \
+  --api-key=source-api-key \
+  --include-data \
+  --output=./migration
+
+# Import to local target (port 8109), including documents
+./terraform-provider-typesense migrate \
+  --source-dir=./migration \
+  --target-host=localhost --target-port=8109 --target-protocol=http \
+  --target-api-key=target-api-key \
+  --include-documents
+```
+---
+
 ## Available Resources
 
 ### Cloud Management
@@ -695,9 +768,17 @@ The provider binary also works as a standalone CLI:
 
 ```bash
 ./terraform-provider-typesense generate --help    # Export cluster config to .tf files
-./terraform-provider-typesense migrate --help     # Migrate documents between clusters
+./terraform-provider-typesense migrate --help     # Migrate data between clusters
 ./terraform-provider-typesense version            # Print version
 ```
+
+| Command | Key Flags | Description |
+|---------|-----------|-------------|
+| `generate` | `--host`, `--api-key`, `--output` | Export cluster schema to `.tf` files and import scripts |
+| `generate` | `--include-data` | Also export documents to JSONL files (off by default) |
+| `migrate` | `--source-dir`, `--target-host`, `--target-api-key` | Import schema (synonyms, overrides, stopwords) to target cluster |
+| `migrate` | `--include-documents` | Also import documents from JSONL files (off by default) |
+| `version` | | Print binary version |
 
 ---
 
