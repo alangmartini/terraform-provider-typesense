@@ -372,11 +372,37 @@ resource "typesense_stopwords_set" "english" {
   stopwords = ["the", "a", "an", "and", "or", "but"]
 }
 
-# 4. Create search-only API key
+# 4. Create search-only API key (auto-generated value)
 resource "typesense_api_key" "public_search" {
   description = "Public search key"
   actions     = ["documents:search"]
   collections = [typesense_collection.articles.name]
+}
+
+# 5. Create a key with a specific value (same across prod/staging)
+resource "typesense_api_key" "shared_search" {
+  description = "Shared search key"
+  value       = var.shared_search_key
+  actions     = ["documents:search"]
+  collections = ["*"]
+}
+
+# 6. Create a temporary key that auto-deletes after expiration
+resource "typesense_api_key" "temp_key" {
+  description = "Temporary ingest key"
+  actions     = ["documents:create"]
+  collections = ["*"]
+  expires_at  = 1735689600
+  autodelete  = true
+}
+
+output "search_api_key" {
+  value     = typesense_api_key.public_search.value
+  sensitive = true
+}
+
+output "search_key_prefix" {
+  value = typesense_api_key.public_search.value_prefix
 }
 ```
 

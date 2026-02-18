@@ -46,3 +46,20 @@ resource "typesense_api_key" "analytics_reader" {
     typesense_collection.nohits_queries.name,
   ]
 }
+
+# Shared search key with user-provided value
+# Demonstrates multi-environment pattern: use the same key value across
+# prod/staging by passing it as a variable, so client applications don't
+# need to update their key when switching environments.
+resource "typesense_api_key" "shared_search" {
+  count = var.shared_search_key != "" ? 1 : 0
+
+  description = "Shared search key (same value across environments)"
+  value       = var.shared_search_key
+  actions     = ["documents:search"]
+  collections = [
+    typesense_collection.tracks.name,
+    typesense_collection.albums.name,
+    typesense_collection.artists.name,
+  ]
+}
