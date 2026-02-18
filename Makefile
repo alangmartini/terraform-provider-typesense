@@ -95,7 +95,7 @@ stop-typesense:
 # Run acceptance tests (starts Typesense, runs tests, cleans up)
 test-acc:
 	@echo "Starting acceptance test run..."
-	@$(MAKE) start-typesense
+	@"$(MAKE)" start-typesense
 	@echo ""
 	@echo "Running acceptance tests..."
 	@export TYPESENSE_HOST=$(TYPESENSE_HOST) && \
@@ -103,9 +103,9 @@ test-acc:
 	export TYPESENSE_PROTOCOL=$(TYPESENSE_PROTOCOL) && \
 	export TYPESENSE_API_KEY=$(TYPESENSE_API_KEY) && \
 	export TF_ACC=1 && \
-	go test ./... -v || ($(MAKE) stop-typesense && exit 1)
+	go test ./... -v || ("$(MAKE)" stop-typesense && exit 1)
 	@echo ""
-	@$(MAKE) stop-typesense
+	@"$(MAKE)" stop-typesense
 	@echo ""
 	@echo "✓ Acceptance tests complete!"
 
@@ -265,15 +265,15 @@ chinook-destroy:
 # Full chinook test cycle
 chinook-test:
 	@echo "Running full chinook example test..."
-	@$(MAKE) start-typesense
-	@$(MAKE) chinook-apply || ($(MAKE) stop-typesense && exit 1)
+	@"$(MAKE)" start-typesense
+	@"$(MAKE)" chinook-apply || ("$(MAKE)" stop-typesense && exit 1)
 	@echo ""
 	@echo "Verifying resources were created..."
 	@curl -sf "http://localhost:$(PORT)/collections" \
 		-H "X-TYPESENSE-API-KEY: $(TYPESENSE_API_KEY)" | \
 		jq -r '.[] | .name' | sort
 	@echo ""
-	@$(MAKE) chinook-destroy
-	@$(MAKE) stop-typesense
+	@"$(MAKE)" chinook-destroy
+	@"$(MAKE)" stop-typesense
 	@echo ""
 	@echo "✓ Chinook test complete!"
