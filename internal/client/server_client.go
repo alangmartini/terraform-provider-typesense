@@ -203,6 +203,7 @@ type APIKey struct {
 	Actions     []string `json:"actions"`
 	Collections []string `json:"collections"`
 	ExpiresAt   int64    `json:"expires_at,omitempty"`
+	AutoDelete  bool     `json:"autodelete,omitempty"`
 }
 
 // CollectionAlias represents a Typesense collection alias

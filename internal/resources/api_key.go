@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -32,10 +33,12 @@ type APIKeyResource struct {
 type APIKeyResourceModel struct {
 	ID          types.String `tfsdk:"id"`
 	Value       types.String `tfsdk:"value"`
+	ValuePrefix types.String `tfsdk:"value_prefix"`
 	Description types.String `tfsdk:"description"`
 	Actions     types.List   `tfsdk:"actions"`
 	Collections types.List   `tfsdk:"collections"`
 	ExpiresAt   types.Int64  `tfsdk:"expires_at"`
+	AutoDelete  types.Bool   `tfsdk:"autodelete"`
 }
 
 func (r *APIKeyResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -54,9 +57,21 @@ func (r *APIKeyResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				},
 			},
 			"value": schema.StringAttribute{
-				Description: "The API key value. Only available on creation.",
+				Description: "The API key value. Set this to use a specific key value (e.g., for consistent keys across environments). If omitted, Typesense generates one automatically. Only the full value is available at creation time; subsequent reads return only a 4-character prefix.",
+				Optional:    true,
 				Computed:    true,
 				Sensitive:   true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"value_prefix": schema.StringAttribute{
+				Description: "First 4 characters of the API key value, useful for identifying keys.",
+				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"description": schema.StringAttribute{
 				Description: "A description for the API key.",
@@ -75,6 +90,13 @@ func (r *APIKeyResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"expires_at": schema.Int64Attribute{
 				Description: "Unix timestamp when this key expires. 0 means never expires.",
 				Optional:    true,
+			},
+			"autodelete": schema.BoolAttribute{
+				Description: "If true, the API key is automatically deleted after it expires. Requires expires_at to be set.",
+				Optional:    true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
 			},
 		},
 	}
@@ -140,6 +162,14 @@ func (r *APIKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 		apiKey.ExpiresAt = data.ExpiresAt.ValueInt64()
 	}
 
+	if !data.Value.IsNull() && !data.Value.IsUnknown() {
+		apiKey.Value = data.Value.ValueString()
+	}
+
+	if !data.AutoDelete.IsNull() {
+		apiKey.AutoDelete = data.AutoDelete.ValueBool()
+	}
+
 	created, err := r.client.CreateAPIKey(ctx, apiKey)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create API key: %s", err))
@@ -148,6 +178,13 @@ func (r *APIKeyResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	data.ID = types.StringValue(strconv.FormatInt(created.ID, 10))
 	data.Value = types.StringValue(created.Value)
+
+	// Compute value_prefix from the full key value
+	prefix := created.Value
+	if len(prefix) > 4 {
+		prefix = prefix[:4]
+	}
+	data.ValuePrefix = types.StringValue(prefix)
 
 	// Also update expires_at from the response if it was set in the config
 	// This ensures consistency between what was requested and what the API stored
@@ -184,10 +221,18 @@ func (r *APIKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	// Update from API response (note: value is not returned on read)
+	// Update from API response (note: full value is not returned on read, only a prefix)
 	if apiKey.Description != "" {
 		data.Description = types.StringValue(apiKey.Description)
 	}
+
+	// Update value_prefix from the API response (GET returns only the first 4 chars in `value`)
+	if apiKey.Value != "" {
+		data.ValuePrefix = types.StringValue(apiKey.Value)
+	}
+
+	// Note: data.Value is preserved from state (UseStateForUnknown plan modifier)
+	// Note: data.AutoDelete is preserved from state (not returned by GET API)
 
 	// Update actions
 	actionValues := make([]types.String, len(apiKey.Actions))
