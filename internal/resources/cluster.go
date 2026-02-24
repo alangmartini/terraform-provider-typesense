@@ -239,12 +239,17 @@ func (r *ClusterResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	r.updateModelFromCluster(&data, cluster)
 
-	// Restore API keys from state since GetCluster doesn't return them
-	if !adminAPIKey.IsNull() && data.AdminAPIKey.IsNull() {
+	// Restore API keys from state since GetCluster doesn't return them.
+	// If keys were never available (e.g., imported cluster), set to empty string.
+	if !adminAPIKey.IsNull() {
 		data.AdminAPIKey = adminAPIKey
+	} else if data.AdminAPIKey.IsNull() || data.AdminAPIKey.IsUnknown() {
+		data.AdminAPIKey = types.StringValue("")
 	}
-	if !searchAPIKey.IsNull() && data.SearchAPIKey.IsNull() {
+	if !searchAPIKey.IsNull() {
 		data.SearchAPIKey = searchAPIKey
+	} else if data.SearchAPIKey.IsNull() || data.SearchAPIKey.IsUnknown() {
+		data.SearchAPIKey = types.StringValue("")
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -302,6 +307,9 @@ func (r *ClusterResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	if needsConfigChange {
+		// Set perform_change_at to now for immediate execution
+		configChange.PerformChangeAt = time.Now().Unix()
+
 		_, err := r.client.CreateClusterConfigChange(ctx, configChange)
 		if err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create cluster configuration change: %s", err))
@@ -325,12 +333,18 @@ func (r *ClusterResource) Update(ctx context.Context, req resource.UpdateRequest
 
 	r.updateModelFromCluster(&data, refreshed)
 
-	// Restore API keys from state since GetCluster doesn't return them
-	if !state.AdminAPIKey.IsNull() && data.AdminAPIKey.IsNull() {
+	// Restore API keys from state since GetCluster doesn't return them.
+	// If keys were never available (e.g., imported cluster), set to empty string
+	// to avoid "unknown value after apply" errors.
+	if !state.AdminAPIKey.IsNull() {
 		data.AdminAPIKey = state.AdminAPIKey
+	} else if data.AdminAPIKey.IsNull() || data.AdminAPIKey.IsUnknown() {
+		data.AdminAPIKey = types.StringValue("")
 	}
-	if !state.SearchAPIKey.IsNull() && data.SearchAPIKey.IsNull() {
+	if !state.SearchAPIKey.IsNull() {
 		data.SearchAPIKey = state.SearchAPIKey
+	} else if data.SearchAPIKey.IsNull() || data.SearchAPIKey.IsUnknown() {
+		data.SearchAPIKey = types.StringValue("")
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
