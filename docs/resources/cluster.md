@@ -112,6 +112,24 @@ resource "typesense_cluster" "development" {
 | `yes_3_way` | 3-node cluster (explicit) |
 | `yes_5_way` | 5-node cluster |
 
+## In-Place Configuration Changes
+
+Changing `memory`, `vcpu`, `high_availability`, or `typesense_server_version` on an existing cluster will automatically trigger the Typesense Cloud [configuration change API](https://cloud.typesense.org/docs/api#configuration-changes). Terraform will wait for the cluster to return to `in_service` status before completing the apply.
+
+```terraform
+# Simply update the values — no separate config change resource needed
+resource "typesense_cluster" "production" {
+  name                     = "production"
+  memory                   = "16_gb"    # was 8_gb — triggers config change
+  vcpu                     = "8_vcpus"  # was 4_vcpus — triggers config change
+  high_availability        = "yes"
+  typesense_server_version = "27.1"
+  regions                  = ["us-east-1", "us-west-2"]
+}
+```
+
+~> **Note:** For scheduled configuration changes (via `perform_change_at`), use the [`typesense_cluster_config_change`](cluster_config_change.md) resource instead.
+
 ## Import
 
 Clusters can be imported using the cluster ID:
