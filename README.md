@@ -686,8 +686,8 @@ The provider binary includes `generate` and `migrate` commands that work togethe
 
 | Resource | Purpose |
 |----------|---------|
-| `typesense_cluster` | Create and manage Typesense Cloud clusters |
-| `typesense_cluster_config_change` | Schedule cluster configuration changes |
+| `typesense_cluster` | Create and manage Typesense Cloud clusters (in-place config changes for memory, vCPU, HA, version) |
+| `typesense_cluster_config_change` | Schedule cluster configuration changes (for deferred changes via `perform_change_at`) |
 
 ### Server Resources
 
