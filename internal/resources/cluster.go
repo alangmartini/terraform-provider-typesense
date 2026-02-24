@@ -261,22 +261,71 @@ func (r *ClusterResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	// Only name and auto_upgrade_capacity can be updated directly
-	// Other changes require a configuration change resource
-	cluster := &client.Cluster{
-		Name:                data.Name.ValueString(),
-		AutoUpgradeCapacity: data.AutoUpgradeCapacity.ValueBool(),
+	clusterID := data.ID.ValueString()
+
+	// Step 1: Apply direct updates (name, auto_upgrade_capacity) — fast metadata changes
+	if data.Name.ValueString() != state.Name.ValueString() ||
+		data.AutoUpgradeCapacity.ValueBool() != state.AutoUpgradeCapacity.ValueBool() {
+		cluster := &client.Cluster{
+			Name:                data.Name.ValueString(),
+			AutoUpgradeCapacity: data.AutoUpgradeCapacity.ValueBool(),
+		}
+
+		_, err := r.client.UpdateCluster(ctx, clusterID, cluster)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update cluster: %s", err))
+			return
+		}
 	}
 
-	updated, err := r.client.UpdateCluster(ctx, data.ID.ValueString(), cluster)
+	// Step 2: Detect infrastructure changes that require the config change API
+	configChange := &client.ClusterConfigChange{
+		ClusterID: clusterID,
+	}
+	needsConfigChange := false
+
+	if data.Memory.ValueString() != state.Memory.ValueString() {
+		configChange.NewMemory = data.Memory.ValueString()
+		needsConfigChange = true
+	}
+	if data.VCPU.ValueString() != state.VCPU.ValueString() {
+		configChange.NewVCPU = data.VCPU.ValueString()
+		needsConfigChange = true
+	}
+	if data.HighAvailability.ValueString() != state.HighAvailability.ValueString() {
+		configChange.NewHighAvailability = data.HighAvailability.ValueString()
+		needsConfigChange = true
+	}
+	if data.TypesenseServerVersion.ValueString() != state.TypesenseServerVersion.ValueString() {
+		configChange.NewTypesenseVersion = data.TypesenseServerVersion.ValueString()
+		needsConfigChange = true
+	}
+
+	if needsConfigChange {
+		_, err := r.client.CreateClusterConfigChange(ctx, configChange)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create cluster configuration change: %s", err))
+			return
+		}
+
+		// Wait for the cluster to finish applying the config change (up to 15 minutes)
+		_, err = r.client.WaitForClusterReady(ctx, clusterID, 15*time.Minute)
+		if err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Error waiting for cluster configuration change to complete: %s", err))
+			return
+		}
+	}
+
+	// Step 3: Refresh state from the API to capture the final cluster state
+	refreshed, err := r.client.GetCluster(ctx, clusterID)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update cluster: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read cluster after update: %s", err))
 		return
 	}
 
-	r.updateModelFromCluster(&data, updated)
+	r.updateModelFromCluster(&data, refreshed)
 
-	// Restore API keys from state since UpdateCluster doesn't return them
+	// Restore API keys from state since GetCluster doesn't return them
 	if !state.AdminAPIKey.IsNull() && data.AdminAPIKey.IsNull() {
 		data.AdminAPIKey = state.AdminAPIKey
 	}
