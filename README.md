@@ -1,5 +1,8 @@
 # Typesense Terraform Provider
 
+>[!WARNING]
+> **This provider is currently in BETA.** APIs, resource schemas, and behaviors may change between releases. Use in production at your own discretion.
+
 A Terraform provider for managing [Typesense](https://typesense.org/) search infrastructure as code. Works with both **Typesense Cloud** and **self-hosted** instances.
 
 ## Table of Contents
