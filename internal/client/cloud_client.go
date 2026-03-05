@@ -368,10 +368,12 @@ func (c *CloudClient) ListClusters(ctx context.Context) ([]Cluster, error) {
 		return nil, fmt.Errorf("failed to list clusters: status %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	var result []Cluster
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	var wrapper struct {
+		Clusters []Cluster `json:"clusters"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return result, nil
+	return wrapper.Clusters, nil
 }
