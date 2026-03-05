@@ -113,9 +113,10 @@ go build -o terraform-provider-typesense .
 ./terraform-provider-typesense generate \
   --host=xyz.a1.typesense.net --port=443 --protocol=https \
   --api-key=YOUR_ADMIN_API_KEY \
+  --cloud-api-key=YOUR_CLOUD_MANAGEMENT_KEY \
   --output=./my-typesense-config
 
-# Or from a local instance
+# Or from a local instance (no --cloud-api-key needed)
 ./terraform-provider-typesense generate \
   --host=localhost --port=8108 --protocol=http \
   --api-key=YOUR_API_KEY \
