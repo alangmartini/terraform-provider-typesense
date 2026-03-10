@@ -4,6 +4,7 @@ package resources
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
@@ -13,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -22,6 +24,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &ClusterResource{}
 var _ resource.ResourceWithImportState = &ClusterResource{}
+var _ resource.ResourceWithModifyPlan = &ClusterResource{}
 
 // NewClusterResource creates a new cluster resource
 func NewClusterResource() resource.Resource {
@@ -68,37 +71,54 @@ func (r *ClusterResource) Schema(ctx context.Context, req resource.SchemaRequest
 				},
 			},
 			"name": schema.StringAttribute{
-				Description: "The name of the cluster.",
+				Description: "The name of the cluster. This can be updated in place via the Cloud cluster update API.",
 				Required:    true,
 			},
 			"memory": schema.StringAttribute{
-				Description: "Memory configuration (e.g., '0.5_gb', '1_gb', '2_gb', '4_gb', '8_gb', '16_gb', '32_gb', '64_gb', '128_gb', '192_gb', '256_gb', '384_gb', '512_gb').",
+				Description: "Memory configuration (e.g., '0.5_gb', '1_gb', '2_gb', '4_gb', '8_gb', '16_gb', '32_gb', '64_gb', '128_gb', '192_gb', '256_gb', '384_gb', '512_gb'). On existing clusters this is applied via the Cloud configuration changes API.",
 				Required:    true,
 			},
 			"vcpu": schema.StringAttribute{
-				Description: "vCPU configuration (e.g., '2_vcpus_4_hr_burst_per_day', '2_vcpus', '4_vcpus', '8_vcpus', etc.).",
+				Description: "vCPU configuration (e.g., '2_vcpus_4_hr_burst_per_day', '2_vcpus', '4_vcpus', '8_vcpus', etc.). On existing clusters this is applied via the Cloud configuration changes API.",
 				Required:    true,
 			},
 			"high_availability": schema.StringAttribute{
-				Description: "High availability setting ('yes', 'no', or 'yes_3_way', 'yes_5_way').",
+				Description: "High availability setting ('yes', 'no', or 'yes_3_way', 'yes_5_way'). On existing clusters this is applied via the Cloud configuration changes API. Typesense Cloud documentation notes that once high availability is enabled, it cannot be turned off without recreating the cluster.",
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("no"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplaceIf(
+						func(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+							if clusterHighAvailabilityReplacementNeeded(req.StateValue, req.PlanValue) {
+								resp.RequiresReplace = true
+							}
+						},
+						"Recreate cluster when disabling high availability",
+						"Typesense Cloud does not allow disabling high availability on an existing cluster; recreate the cluster instead.",
+					),
+				},
 			},
 			"search_delivery_network": schema.StringAttribute{
-				Description: "Search delivery network setting ('off', 'on').",
+				Description: "Search delivery network setting ('off', 'on'). This is set only at cluster creation time; changing it recreates the cluster.",
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("off"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"typesense_server_version": schema.StringAttribute{
-				Description: "Typesense server version (e.g., '27.1', '26.0').",
+				Description: "Typesense server version (e.g., '27.1', '26.0'). On existing clusters this is applied via the Cloud configuration changes API.",
 				Required:    true,
 			},
 			"regions": schema.ListAttribute{
-				Description: "List of regions to deploy the cluster in.",
+				Description: "List of regions to deploy the cluster in. This is set only at cluster creation time; changing it recreates the cluster.",
 				Required:    true,
 				ElementType: types.StringType,
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.RequiresReplace(),
+				},
 			},
 			"status": schema.StringAttribute{
 				Description: "Current status of the cluster.",
@@ -124,7 +144,7 @@ func (r *ClusterResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Sensitive:   true,
 			},
 			"auto_upgrade_capacity": schema.BoolAttribute{
-				Description: "Whether to auto-upgrade cluster capacity.",
+				Description: "Whether to auto-upgrade cluster capacity. This can be updated in place via the Cloud cluster update API.",
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
@@ -161,6 +181,26 @@ func (r *ClusterResource) Configure(ctx context.Context, req resource.ConfigureR
 	}
 
 	r.client = providerData.CloudClient
+}
+
+func (r *ClusterResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var state ClusterResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+
+	var plan ClusterResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	for _, warning := range clusterPlanWarnings(state, plan) {
+		resp.Diagnostics.AddAttributeWarning(path.Root(warning.Attribute), warning.Summary, warning.Detail)
+	}
 }
 
 func (r *ClusterResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -402,5 +442,74 @@ func (r *ClusterResource) updateModelFromCluster(data *ClusterResourceModel, clu
 	if cluster.APIKeys != nil {
 		data.AdminAPIKey = types.StringValue(cluster.APIKeys.Admin)
 		data.SearchAPIKey = types.StringValue(cluster.APIKeys.SearchOnly)
+	}
+}
+
+type clusterPlanWarning struct {
+	Attribute string
+	Summary   string
+	Detail    string
+}
+
+func clusterPlanWarnings(state, plan ClusterResourceModel) []clusterPlanWarning {
+	var warnings []clusterPlanWarning
+
+	if stringValueChanged(state.SearchDeliveryNetwork, plan.SearchDeliveryNetwork) {
+		warnings = append(warnings, clusterPlanWarning{
+			Attribute: "search_delivery_network",
+			Summary:   "Cluster Replacement Required",
+			Detail:    "Typesense Cloud only accepts `search_delivery_network` when a cluster is created. Terraform will replace this cluster to apply the new value.",
+		})
+	}
+
+	if listValueChanged(state.Regions, plan.Regions) {
+		warnings = append(warnings, clusterPlanWarning{
+			Attribute: "regions",
+			Summary:   "Cluster Replacement Required",
+			Detail:    "Typesense Cloud only accepts `regions` when a cluster is created. Terraform will replace this cluster to apply the new region set.",
+		})
+	}
+
+	if clusterHighAvailabilityReplacementNeeded(state.HighAvailability, plan.HighAvailability) {
+		warnings = append(warnings, clusterPlanWarning{
+			Attribute: "high_availability",
+			Summary:   "Cluster Replacement Required",
+			Detail:    "Typesense Cloud does not allow disabling high availability on an existing cluster. Terraform will replace this cluster to apply this change.",
+		})
+	}
+
+	return warnings
+}
+
+func stringValueChanged(state, plan types.String) bool {
+	if state.IsNull() || state.IsUnknown() || plan.IsNull() || plan.IsUnknown() {
+		return false
+	}
+
+	return state.ValueString() != plan.ValueString()
+}
+
+func listValueChanged(state, plan types.List) bool {
+	if state.IsNull() || state.IsUnknown() || plan.IsNull() || plan.IsUnknown() {
+		return false
+	}
+
+	return !state.Equal(plan)
+}
+
+func clusterHighAvailabilityReplacementNeeded(state, plan types.String) bool {
+	if state.IsNull() || state.IsUnknown() || plan.IsNull() || plan.IsUnknown() {
+		return false
+	}
+
+	return clusterHighAvailabilityEnabled(state.ValueString()) && !clusterHighAvailabilityEnabled(plan.ValueString())
+}
+
+func clusterHighAvailabilityEnabled(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "no", "false":
+		return false
+	default:
+		return true
 	}
 }
