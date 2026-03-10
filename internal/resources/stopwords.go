@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
 	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -38,7 +39,7 @@ type StopwordsSetResourceModel struct {
 }
 
 func (r *StopwordsSetResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_stopwords_set"
+	resp.TypeName = tfnames.TypeName(req.ProviderTypeName, tfnames.ResourceStopwordsSet)
 }
 
 func (r *StopwordsSetResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -100,7 +101,7 @@ func (r *StopwordsSetResource) Configure(ctx context.Context, req resource.Confi
 }
 
 func (r *StopwordsSetResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	if diags := version.CheckVersionRequirement(r.featureChecker, version.FeatureStopwords, "typesense_stopwords_set"); diags.HasError() {
+	if diags := version.CheckVersionRequirement(r.featureChecker, version.FeatureStopwords, tfnames.FullTypeName(tfnames.ResourceStopwordsSet)); diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
 	}

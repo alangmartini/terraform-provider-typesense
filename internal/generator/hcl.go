@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -14,27 +15,33 @@ func generateTerraformBlock(f *hclwrite.File) {
 	tfBlock := f.Body().AppendNewBlock("terraform", nil)
 	reqProviders := tfBlock.Body().AppendNewBlock("required_providers", nil)
 	reqProviders.Body().SetAttributeValue("typesense", cty.ObjectVal(map[string]cty.Value{
-		"source": cty.StringVal("alanm/typesense"),
+		"source": cty.StringVal(tfnames.ProviderSource),
 	}))
 	f.Body().AppendNewline()
 }
 
 // generateProviderBlock creates the provider configuration block
-func generateProviderBlock(f *hclwrite.File, host string, port int, protocol string) {
+func generateProviderBlock(f *hclwrite.File, host string, port int, protocol string, includeServerAPIKey bool, includeCloudAPIKey bool) {
 	providerBlock := f.Body().AppendNewBlock("provider", []string{"typesense"})
 	providerBlock.Body().SetAttributeValue("server_host", cty.StringVal(host))
 	providerBlock.Body().SetAttributeValue("server_port", cty.NumberIntVal(int64(port)))
 	providerBlock.Body().SetAttributeValue("server_protocol", cty.StringVal(protocol))
-	// Add comment for API key
-	providerBlock.Body().AppendUnstructuredTokens(hclwrite.Tokens{
-		{Type: 4, Bytes: []byte("# server_api_key = \"YOUR_API_KEY_HERE\"\n")}, // TokenComment = 4
-	})
+	if includeServerAPIKey {
+		providerBlock.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+			{Type: 4, Bytes: []byte("# server_api_key = \"YOUR_API_KEY_HERE\"\n")}, // TokenComment = 4
+		})
+	}
+	if includeCloudAPIKey {
+		providerBlock.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+			{Type: 4, Bytes: []byte("# cloud_management_api_key = \"YOUR_CLOUD_API_KEY_HERE\"\n")}, // TokenComment = 4
+		})
+	}
 	f.Body().AppendNewline()
 }
 
 // generateCollectionBlock creates an HCL block for a collection resource
 func generateCollectionBlock(c *client.Collection, resourceName string) *hclwrite.Block {
-	block := hclwrite.NewBlock("resource", []string{"typesense_collection", resourceName})
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourceCollection), resourceName})
 	body := block.Body()
 
 	body.SetAttributeValue("name", cty.StringVal(c.Name))
@@ -125,32 +132,33 @@ func generateCollectionBlock(c *client.Collection, resourceName string) *hclwrit
 			fieldBody.SetAttributeValue("symbols_to_index", cty.ListVal(sVals))
 		}
 		if field.Embed != nil {
-			embedBlock := fieldBody.AppendNewBlock("embed", nil)
-			embedBody := embedBlock.Body()
+			embedVals := make(map[string]cty.Value)
 			if len(field.Embed.From) > 0 {
 				fromVals := make([]cty.Value, len(field.Embed.From))
 				for i, v := range field.Embed.From {
 					fromVals[i] = cty.StringVal(v)
 				}
-				embedBody.SetAttributeValue("from", cty.ListVal(fromVals))
+				embedVals["from"] = cty.ListVal(fromVals)
 			}
-			mcBlock := embedBody.AppendNewBlock("model_config", nil)
-			mcBody := mcBlock.Body()
-			mcBody.SetAttributeValue("model_name", cty.StringVal(field.Embed.ModelConfig.ModelName))
+			modelConfigVals := map[string]cty.Value{
+				"model_name": cty.StringVal(field.Embed.ModelConfig.ModelName),
+			}
 			if field.Embed.ModelConfig.URL != "" {
-				mcBody.SetAttributeValue("url", cty.StringVal(field.Embed.ModelConfig.URL))
+				modelConfigVals["url"] = cty.StringVal(field.Embed.ModelConfig.URL)
 			}
 			// Intentionally omit api_key from generated HCL (sensitive)
+			embedVals["model_config"] = cty.ObjectVal(modelConfigVals)
+			fieldBody.SetAttributeValue("embed", cty.ObjectVal(embedVals))
 		}
 		if field.HnswParams != nil {
-			hpBlock := fieldBody.AppendNewBlock("hnsw_params", nil)
-			hpBody := hpBlock.Body()
+			hnswVals := make(map[string]cty.Value)
 			if field.HnswParams.EfConstruction > 0 {
-				hpBody.SetAttributeValue("ef_construction", cty.NumberIntVal(field.HnswParams.EfConstruction))
+				hnswVals["ef_construction"] = cty.NumberIntVal(field.HnswParams.EfConstruction)
 			}
 			if field.HnswParams.M > 0 {
-				hpBody.SetAttributeValue("m", cty.NumberIntVal(field.HnswParams.M))
+				hnswVals["m"] = cty.NumberIntVal(field.HnswParams.M)
 			}
+			fieldBody.SetAttributeValue("hnsw_params", cty.ObjectVal(hnswVals))
 		}
 	}
 
@@ -166,14 +174,14 @@ func generateCollectionBlock(c *client.Collection, resourceName string) *hclwrit
 
 // generateSynonymBlock creates an HCL block for a synonym resource
 func generateSynonymBlock(s *client.Synonym, collectionResourceName, resourceName string) *hclwrite.Block {
-	block := hclwrite.NewBlock("resource", []string{"typesense_synonym", resourceName})
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourceSynonym), resourceName})
 	body := block.Body()
 
 	// Reference the collection resource
 	body.AppendUnstructuredTokens(hclwrite.Tokens{
 		{Type: 9, Bytes: []byte("collection")}, // TokenIdent
-		{Type: 11, Bytes: []byte(" = ")},        // TokenEqual with spaces
-		{Type: 9, Bytes: []byte(fmt.Sprintf("typesense_collection.%s.name", collectionResourceName))},
+		{Type: 11, Bytes: []byte(" = ")},       // TokenEqual with spaces
+		{Type: 9, Bytes: []byte(fmt.Sprintf("%s.%s.name", tfnames.FullTypeName(tfnames.ResourceCollection), collectionResourceName))},
 		{Type: 10, Bytes: []byte("\n")}, // TokenNewline
 	})
 
@@ -196,35 +204,34 @@ func generateSynonymBlock(s *client.Synonym, collectionResourceName, resourceNam
 
 // generateOverrideBlock creates an HCL block for an override resource
 func generateOverrideBlock(o *client.Override, collectionResourceName, resourceName string) *hclwrite.Block {
-	block := hclwrite.NewBlock("resource", []string{"typesense_override", resourceName})
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourceOverride), resourceName})
 	body := block.Body()
 
 	// Reference the collection resource
 	body.AppendUnstructuredTokens(hclwrite.Tokens{
 		{Type: 9, Bytes: []byte("collection")},
 		{Type: 11, Bytes: []byte(" = ")},
-		{Type: 9, Bytes: []byte(fmt.Sprintf("typesense_collection.%s.name", collectionResourceName))},
+		{Type: 9, Bytes: []byte(fmt.Sprintf("%s.%s.name", tfnames.FullTypeName(tfnames.ResourceCollection), collectionResourceName))},
 		{Type: 10, Bytes: []byte("\n")},
 	})
 
 	body.SetAttributeValue("name", cty.StringVal(o.ID))
 
-	// Rule block
-	ruleBlock := body.AppendNewBlock("rule", nil)
-	ruleBody := ruleBlock.Body()
+	ruleVals := make(map[string]cty.Value)
 	if o.Rule.Query != "" {
-		ruleBody.SetAttributeValue("query", cty.StringVal(o.Rule.Query))
+		ruleVals["query"] = cty.StringVal(o.Rule.Query)
 	}
 	if o.Rule.Match != "" {
-		ruleBody.SetAttributeValue("match", cty.StringVal(o.Rule.Match))
+		ruleVals["match"] = cty.StringVal(o.Rule.Match)
 	}
 	if len(o.Rule.Tags) > 0 {
 		vals := make([]cty.Value, len(o.Rule.Tags))
 		for i, v := range o.Rule.Tags {
 			vals[i] = cty.StringVal(v)
 		}
-		ruleBody.SetAttributeValue("tags", cty.ListVal(vals))
+		ruleVals["tags"] = cty.ListVal(vals)
 	}
+	body.SetAttributeValue("rule", cty.ObjectVal(ruleVals))
 
 	// Includes
 	for _, inc := range o.Includes {
@@ -272,7 +279,7 @@ func generateOverrideBlock(o *client.Override, collectionResourceName, resourceN
 
 // generateStopwordsBlock creates an HCL block for a stopwords set resource
 func generateStopwordsBlock(sw *client.StopwordsSet, resourceName string) *hclwrite.Block {
-	block := hclwrite.NewBlock("resource", []string{"typesense_stopwords", resourceName})
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourceStopwordsSet), resourceName})
 	body := block.Body()
 
 	body.SetAttributeValue("name", cty.StringVal(sw.ID))
@@ -294,7 +301,7 @@ func generateStopwordsBlock(sw *client.StopwordsSet, resourceName string) *hclwr
 
 // generateClusterBlock creates an HCL block for a cloud cluster resource
 func generateClusterBlock(cl *client.Cluster, resourceName string) *hclwrite.Block {
-	block := hclwrite.NewBlock("resource", []string{"typesense_cluster", resourceName})
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourceCluster), resourceName})
 	body := block.Body()
 
 	body.SetAttributeValue("name", cty.StringVal(cl.Name))
@@ -325,7 +332,7 @@ func generateClusterBlock(cl *client.Cluster, resourceName string) *hclwrite.Blo
 
 // generateAnalyticsRuleBlock creates an HCL block for an analytics rule resource
 func generateAnalyticsRuleBlock(rule *client.AnalyticsRule, resourceName string) *hclwrite.Block {
-	block := hclwrite.NewBlock("resource", []string{"typesense_analytics_rule", resourceName})
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourceAnalyticsRule), resourceName})
 	body := block.Body()
 
 	body.SetAttributeValue("name", cty.StringVal(rule.Name))
@@ -352,7 +359,7 @@ func generateAnalyticsRuleBlock(rule *client.AnalyticsRule, resourceName string)
 
 // generateAPIKeyBlock creates an HCL block for an API key resource
 func generateAPIKeyBlock(key *client.APIKey, resourceName string) *hclwrite.Block {
-	block := hclwrite.NewBlock("resource", []string{"typesense_api_key", resourceName})
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourceAPIKey), resourceName})
 	body := block.Body()
 
 	// Add comment about non-recoverable key value
@@ -390,7 +397,7 @@ func generateAPIKeyBlock(key *client.APIKey, resourceName string) *hclwrite.Bloc
 
 // generateNLSearchModelBlock creates an HCL block for a NL search model resource
 func generateNLSearchModelBlock(model *client.NLSearchModel, resourceName string) *hclwrite.Block {
-	block := hclwrite.NewBlock("resource", []string{"typesense_nl_search_model", resourceName})
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourceNLSearchModel), resourceName})
 	body := block.Body()
 
 	body.SetAttributeValue("id", cty.StringVal(model.ID))
@@ -430,7 +437,7 @@ func generateNLSearchModelBlock(model *client.NLSearchModel, resourceName string
 
 // generateConversationModelBlock creates an HCL block for a conversation model resource
 func generateConversationModelBlock(model *client.ConversationModel, resourceName string) *hclwrite.Block {
-	block := hclwrite.NewBlock("resource", []string{"typesense_conversation_model", resourceName})
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourceConversationModel), resourceName})
 	body := block.Body()
 
 	if model.ID != "" {
@@ -469,4 +476,3 @@ func generateConversationModelBlock(model *client.ConversationModel, resourceNam
 
 	return block
 }
-

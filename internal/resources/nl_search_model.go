@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
 	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -56,7 +57,7 @@ type NLSearchModelResourceModel struct {
 }
 
 func (r *NLSearchModelResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_nl_search_model"
+	resp.TypeName = tfnames.TypeName(req.ProviderTypeName, tfnames.ResourceNLSearchModel)
 }
 
 func (r *NLSearchModelResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -185,7 +186,7 @@ func (r *NLSearchModelResource) Configure(ctx context.Context, req resource.Conf
 }
 
 func (r *NLSearchModelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	if diags := version.CheckVersionRequirement(r.featureChecker, version.FeatureNLSearchModels, "typesense_nl_search_model"); diags.HasError() {
+	if diags := version.CheckVersionRequirement(r.featureChecker, version.FeatureNLSearchModels, tfnames.FullTypeName(tfnames.ResourceNLSearchModel)); diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
 	}

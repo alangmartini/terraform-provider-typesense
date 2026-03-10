@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 )
@@ -104,7 +105,7 @@ func (g *Generator) Generate(ctx context.Context) error {
 	generateTerraformBlock(f)
 
 	// Generate provider block
-	generateProviderBlock(f, g.config.Host, g.config.Port, g.config.Protocol)
+	generateProviderBlock(f, g.config.Host, g.config.Port, g.config.Protocol, g.serverClient != nil, g.cloudClient != nil)
 
 	// Track resource names for uniqueness
 	resourceNames := make(map[string]bool)
@@ -201,7 +202,7 @@ func (g *Generator) generateClusters(ctx context.Context, f *hclwrite.File, reso
 		f.Body().AppendNewline()
 
 		*importCommands = append(*importCommands, ImportCommand{
-			ResourceType: "typesense_cluster",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceCluster),
 			ResourceName: resourceName,
 			ImportID:     ClusterImportID(cluster.ID),
 		})
@@ -234,7 +235,7 @@ func (g *Generator) generateCollections(ctx context.Context, f *hclwrite.File, r
 		f.Body().AppendNewline()
 
 		*importCommands = append(*importCommands, ImportCommand{
-			ResourceType: "typesense_collection",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceCollection),
 			ResourceName: resourceName,
 			ImportID:     CollectionImportID(collection.Name),
 		})
@@ -291,7 +292,7 @@ func (g *Generator) generateStopwords(ctx context.Context, f *hclwrite.File, res
 		f.Body().AppendNewline()
 
 		*importCommands = append(*importCommands, ImportCommand{
-			ResourceType: "typesense_stopwords",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceStopwordsSet),
 			ResourceName: resourceName,
 			ImportID:     StopwordsImportID(sw.ID),
 		})
@@ -399,7 +400,7 @@ func (g *Generator) generatePerCollectionSynonyms(ctx context.Context, f *hclwri
 		f.Body().AppendNewline()
 
 		*importCommands = append(*importCommands, ImportCommand{
-			ResourceType: "typesense_synonym",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceSynonym),
 			ResourceName: resourceName,
 			ImportID:     SynonymImportID(item.collectionName, item.synonym.ID),
 		})
@@ -532,7 +533,7 @@ func (g *Generator) generatePerCollectionOverrides(ctx context.Context, f *hclwr
 		f.Body().AppendNewline()
 
 		*importCommands = append(*importCommands, ImportCommand{
-			ResourceType: "typesense_override",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceOverride),
 			ResourceName: resourceName,
 			ImportID:     OverrideImportID(item.collectionName, item.override.ID),
 		})
@@ -588,7 +589,7 @@ func (g *Generator) generateAnalyticsRules(ctx context.Context, f *hclwrite.File
 		f.Body().AppendNewline()
 
 		*importCommands = append(*importCommands, ImportCommand{
-			ResourceType: "typesense_analytics_rule",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceAnalyticsRule),
 			ResourceName: resourceName,
 			ImportID:     AnalyticsRuleImportID(rule.Name),
 		})
@@ -622,7 +623,7 @@ func (g *Generator) generateAPIKeys(ctx context.Context, f *hclwrite.File, resou
 		f.Body().AppendNewline()
 
 		*importCommands = append(*importCommands, ImportCommand{
-			ResourceType: "typesense_api_key",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceAPIKey),
 			ResourceName: resourceName,
 			ImportID:     APIKeyImportID(key.ID),
 		})
@@ -654,7 +655,7 @@ func (g *Generator) generateNLSearchModels(ctx context.Context, f *hclwrite.File
 		f.Body().AppendNewline()
 
 		*importCommands = append(*importCommands, ImportCommand{
-			ResourceType: "typesense_nl_search_model",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceNLSearchModel),
 			ResourceName: resourceName,
 			ImportID:     NLSearchModelImportID(model.ID),
 		})
@@ -686,7 +687,7 @@ func (g *Generator) generateConversationModels(ctx context.Context, f *hclwrite.
 		f.Body().AppendNewline()
 
 		*importCommands = append(*importCommands, ImportCommand{
-			ResourceType: "typesense_conversation_model",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceConversationModel),
 			ResourceName: resourceName,
 			ImportID:     ConversationModelImportID(model.ID),
 		})
@@ -694,4 +695,3 @@ func (g *Generator) generateConversationModels(ctx context.Context, f *hclwrite.
 
 	return nil
 }
-

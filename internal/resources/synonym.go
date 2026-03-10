@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
 	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -45,7 +46,7 @@ type SynonymResourceModel struct {
 }
 
 func (r *SynonymResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_synonym"
+	resp.TypeName = tfnames.TypeName(req.ProviderTypeName, tfnames.ResourceSynonym)
 }
 
 func (r *SynonymResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {

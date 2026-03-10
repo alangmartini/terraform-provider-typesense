@@ -1,0 +1,44 @@
+name: Nightly Generate Import Plan
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nightly-e2e:
+    name: Seeded Generate Import Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Show tool versions
+        run: |
+          go version
+          terraform version
+          docker --version
+          docker compose version
+          jq --version
+
+      - name: Run seeded generate/import/plan E2E
+        env:
+          CLEANUP_ON_EXIT: "true"
+          FAIL_ON_PLAN_CHANGES: "true"
+        run: ./testbed/scripts/run-e2e-test.sh

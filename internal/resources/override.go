@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
 	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -71,7 +72,7 @@ type OverrideExcludeModel struct {
 }
 
 func (r *OverrideResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_override"
+	resp.TypeName = tfnames.TypeName(req.ProviderTypeName, tfnames.ResourceOverride)
 }
 
 func (r *OverrideResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {

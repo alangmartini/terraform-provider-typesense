@@ -3,17 +3,19 @@ package generator
 import (
 	"strings"
 	"testing"
+
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 )
 
 func TestGenerateImportScript(t *testing.T) {
 	commands := []ImportCommand{
 		{
-			ResourceType: "typesense_collection",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceCollection),
 			ResourceName: "products",
 			ImportID:     "products",
 		},
 		{
-			ResourceType: "typesense_synonym",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceSynonym),
 			ResourceName: "products_clothing",
 			ImportID:     "products/clothing",
 		},
@@ -30,10 +32,10 @@ func TestGenerateImportScript(t *testing.T) {
 	}
 
 	// Check import commands
-	if !strings.Contains(script, `terraform import typesense_collection.products "products"`) {
+	if !strings.Contains(script, `terraform import `+tfnames.FullTypeName(tfnames.ResourceCollection)+`.products "products"`) {
 		t.Error("Script should contain collection import command")
 	}
-	if !strings.Contains(script, `terraform import typesense_synonym.products_clothing "products/clothing"`) {
+	if !strings.Contains(script, `terraform import `+tfnames.FullTypeName(tfnames.ResourceSynonym)+`.products_clothing "products/clothing"`) {
 		t.Error("Script should contain synonym import command")
 	}
 }
@@ -104,22 +106,22 @@ func TestConversationModelImportID(t *testing.T) {
 func TestImportScriptWithNewResourceTypes(t *testing.T) {
 	commands := []ImportCommand{
 		{
-			ResourceType: "typesense_analytics_rule",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceAnalyticsRule),
 			ResourceName: "popular_searches",
 			ImportID:     "popular_searches",
 		},
 		{
-			ResourceType: "typesense_api_key",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceAPIKey),
 			ResourceName: "search_only_key",
 			ImportID:     "1",
 		},
 		{
-			ResourceType: "typesense_nl_search_model",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceNLSearchModel),
 			ResourceName: "nl_model_1",
 			ImportID:     "nl_model_1",
 		},
 		{
-			ResourceType: "typesense_conversation_model",
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceConversationModel),
 			ResourceName: "conv_model_1",
 			ImportID:     "conv_model_1",
 		},
@@ -127,16 +129,16 @@ func TestImportScriptWithNewResourceTypes(t *testing.T) {
 
 	script := GenerateImportScript(commands)
 
-	if !strings.Contains(script, `terraform import typesense_analytics_rule.popular_searches "popular_searches"`) {
+	if !strings.Contains(script, `terraform import `+tfnames.FullTypeName(tfnames.ResourceAnalyticsRule)+`.popular_searches "popular_searches"`) {
 		t.Error("Script should contain analytics rule import command")
 	}
-	if !strings.Contains(script, `terraform import typesense_api_key.search_only_key "1"`) {
+	if !strings.Contains(script, `terraform import `+tfnames.FullTypeName(tfnames.ResourceAPIKey)+`.search_only_key "1"`) {
 		t.Error("Script should contain API key import command")
 	}
-	if !strings.Contains(script, `terraform import typesense_nl_search_model.nl_model_1 "nl_model_1"`) {
+	if !strings.Contains(script, `terraform import `+tfnames.FullTypeName(tfnames.ResourceNLSearchModel)+`.nl_model_1 "nl_model_1"`) {
 		t.Error("Script should contain NL search model import command")
 	}
-	if !strings.Contains(script, `terraform import typesense_conversation_model.conv_model_1 "conv_model_1"`) {
+	if !strings.Contains(script, `terraform import `+tfnames.FullTypeName(tfnames.ResourceConversationModel)+`.conv_model_1 "conv_model_1"`) {
 		t.Error("Script should contain conversation model import command")
 	}
 }
