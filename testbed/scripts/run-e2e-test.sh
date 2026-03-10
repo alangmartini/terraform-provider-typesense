@@ -20,6 +20,7 @@ EXPORT_DIR="${EXPORT_DIR:-$TESTBED_DIR/export}"
 
 # Cleanup on exit
 CLEANUP_ON_EXIT="${CLEANUP_ON_EXIT:-false}"
+FAIL_ON_PLAN_CHANGES="${FAIL_ON_PLAN_CHANGES:-false}"
 
 log() {
     echo ""
@@ -224,12 +225,17 @@ EOF
     plan_output=$(terraform plan -detailed-exitcode 2>&1) || {
         local exit_code=$?
         if [ $exit_code -eq 2 ]; then
+            if [ "$FAIL_ON_PLAN_CHANGES" = "true" ]; then
+                echo "ERROR: Terraform plan shows changes:"
+                echo "$plan_output"
+                exit 1
+            fi
             echo "WARNING: Terraform plan shows changes:"
             echo "$plan_output"
-            # Not failing the test for now, as this may be expected
         elif [ $exit_code -ne 0 ]; then
             echo "Terraform plan failed:"
             echo "$plan_output"
+            exit $exit_code
         fi
     }
 
