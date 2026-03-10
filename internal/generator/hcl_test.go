@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 )
 
@@ -22,6 +23,23 @@ func containsAttr(hcl, attrName, attrValue string) bool {
 	// Match attribute = value with flexible whitespace
 	pattern := regexp.MustCompile(regexp.QuoteMeta(attrName) + `\s*=\s*` + regexp.QuoteMeta(attrValue))
 	return pattern.MatchString(hcl)
+}
+
+func TestGenerateProviderBlockIncludesCredentialPlaceholders(t *testing.T) {
+	f := hclwrite.NewEmptyFile()
+
+	generateProviderBlock(f, "docs.a1.typesense.net", 443, "https", true, true)
+	hcl := string(f.Bytes())
+
+	if !containsAttr(hcl, "server_host", `"docs.a1.typesense.net"`) {
+		t.Error("Provider block should contain server_host")
+	}
+	if !strings.Contains(hcl, `# server_api_key = "YOUR_API_KEY_HERE"`) {
+		t.Error("Provider block should include server API key placeholder when server resources are exported")
+	}
+	if !strings.Contains(hcl, `# cloud_management_api_key = "YOUR_CLOUD_API_KEY_HERE"`) {
+		t.Error("Provider block should include cloud API key placeholder when cloud resources are exported")
+	}
 }
 
 func TestGenerateCollectionBlock(t *testing.T) {
@@ -57,7 +75,7 @@ func TestGenerateCollectionBlock(t *testing.T) {
 	hcl := blockToHCL(block)
 
 	// Check essential parts are present
-	if !strings.Contains(hcl, `resource "typesense_collection" "products"`) {
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourceCollection)+`" "products"`) {
 		t.Error("Block should contain resource type and name")
 	}
 	if !containsAttr(hcl, "name", `"products"`) {
@@ -74,6 +92,49 @@ func TestGenerateCollectionBlock(t *testing.T) {
 	}
 }
 
+func TestGenerateCollectionBlockNestedAttributes(t *testing.T) {
+	collection := &client.Collection{
+		Name: "products",
+		Fields: []client.CollectionField{
+			{
+				Name:    "embedding",
+				Type:    "float[]",
+				NumDim:  384,
+				VecDist: "cosine",
+				Embed: &client.FieldEmbed{
+					From: []string{"title", "description"},
+					ModelConfig: client.FieldModelConfig{
+						ModelName: "ts/all-MiniLM-L12-v2",
+					},
+				},
+				HnswParams: &client.FieldHnswParams{
+					EfConstruction: 200,
+					M:              16,
+				},
+			},
+		},
+	}
+
+	block := generateCollectionBlock(collection, "products")
+	hcl := blockToHCL(block)
+
+	if !containsAttr(hcl, "embed", "{") {
+		t.Error("Block should emit embed as an object attribute")
+	}
+	if strings.Contains(hcl, "embed {") {
+		t.Error("Block should not emit embed as a nested block")
+	}
+	if !containsAttr(hcl, "model_config", "{") {
+		t.Error("Block should emit model_config as an object attribute")
+	}
+	if !containsAttr(hcl, "hnsw_params", "{") {
+		t.Error("Block should emit hnsw_params as an object attribute")
+	}
+	if strings.Contains(hcl, "hnsw_params {") {
+		t.Error("Block should not emit hnsw_params as a nested block")
+	}
+}
+
 func TestGenerateSynonymBlock(t *testing.T) {
 	synonym := &client.Synonym{
 		ID:       "clothing",
@@ -83,13 +144,13 @@ func TestGenerateSynonymBlock(t *testing.T) {
 	block := generateSynonymBlock(synonym, "products", "products_clothing")
 	hcl := blockToHCL(block)
 
-	if !strings.Contains(hcl, `resource "typesense_synonym" "products_clothing"`) {
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourceSynonym)+`" "products_clothing"`) {
 		t.Error("Block should contain resource type and name")
 	}
 	if !containsAttr(hcl, "name", `"clothing"`) {
 		t.Error("Block should contain name attribute")
 	}
-	if !strings.Contains(hcl, "typesense_collection.products.name") {
+	if !strings.Contains(hcl, tfnames.FullTypeName(tfnames.ResourceCollection)+".products.name") {
 		t.Error("Block should reference collection")
 	}
 }
@@ -130,11 +191,14 @@ func TestGenerateOverrideBlock(t *testing.T) {
 	block := generateOverrideBlock(override, "products", "products_promote_sale")
 	hcl := blockToHCL(block)
 
-	if !strings.Contains(hcl, `resource "typesense_override" "products_promote_sale"`) {
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourceOverride)+`" "products_promote_sale"`) {
 		t.Error("Block should contain resource type and name")
 	}
-	if !strings.Contains(hcl, "rule {") {
-		t.Error("Block should contain rule block")
+	if !containsAttr(hcl, "rule", "{") {
+		t.Error("Block should emit rule as an object attribute")
+	}
+	if strings.Contains(hcl, "rule {") {
+		t.Error("Block should not emit rule as a nested block")
 	}
 	if !containsAttr(hcl, "query", `"sale"`) {
 		t.Error("Block should contain query in rule")
@@ -160,7 +224,7 @@ func TestGenerateStopwordsBlock(t *testing.T) {
 	block := generateStopwordsBlock(stopwords, "common_words")
 	hcl := blockToHCL(block)
 
-	if !strings.Contains(hcl, `resource "typesense_stopwords" "common_words"`) {
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourceStopwordsSet)+`" "common_words"`) {
 		t.Error("Block should contain resource type and name")
 	}
 	if !containsAttr(hcl, "name", `"common_words"`) {
@@ -186,7 +250,7 @@ func TestGenerateClusterBlock(t *testing.T) {
 	block := generateClusterBlock(cluster, "my_cluster")
 	hcl := blockToHCL(block)
 
-	if !strings.Contains(hcl, `resource "typesense_cluster" "my_cluster"`) {
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourceCluster)+`" "my_cluster"`) {
 		t.Error("Block should contain resource type and name")
 	}
 	if !containsAttr(hcl, "name", `"my-cluster"`) {
@@ -215,7 +279,7 @@ func TestGenerateAnalyticsRuleBlock(t *testing.T) {
 	block := generateAnalyticsRuleBlock(rule, "popular_searches")
 	hcl := blockToHCL(block)
 
-	if !strings.Contains(hcl, `resource "typesense_analytics_rule" "popular_searches"`) {
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourceAnalyticsRule)+`" "popular_searches"`) {
 		t.Error("Block should contain resource type and name")
 	}
 	if !containsAttr(hcl, "name", `"popular_searches"`) {
@@ -243,7 +307,7 @@ func TestGenerateAnalyticsRuleBlockCounter(t *testing.T) {
 		EventType:  "click",
 		Params: map[string]any{
 			"destination_collection": "product_clicks",
-			"counter_field":         "click_count",
+			"counter_field":          "click_count",
 		},
 	}
 
@@ -270,7 +334,7 @@ func TestGenerateAPIKeyBlock(t *testing.T) {
 	block := generateAPIKeyBlock(key, "search_only_key")
 	hcl := blockToHCL(block)
 
-	if !strings.Contains(hcl, `resource "typesense_api_key" "search_only_key"`) {
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourceAPIKey)+`" "search_only_key"`) {
 		t.Error("Block should contain resource type and name")
 	}
 	if !strings.Contains(hcl, "API key value is not recoverable") {
@@ -321,7 +385,7 @@ func TestGenerateNLSearchModelBlock(t *testing.T) {
 	block := generateNLSearchModelBlock(model, "nl_model_1")
 	hcl := blockToHCL(block)
 
-	if !strings.Contains(hcl, `resource "typesense_nl_search_model" "nl_model_1"`) {
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourceNLSearchModel)+`" "nl_model_1"`) {
 		t.Error("Block should contain resource type and name")
 	}
 	if !containsAttr(hcl, "id", `"nl_model_1"`) {
@@ -357,7 +421,7 @@ func TestGenerateConversationModelBlock(t *testing.T) {
 	block := generateConversationModelBlock(model, "conv_model_1")
 	hcl := blockToHCL(block)
 
-	if !strings.Contains(hcl, `resource "typesense_conversation_model" "conv_model_1"`) {
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourceConversationModel)+`" "conv_model_1"`) {
 		t.Error("Block should contain resource type and name")
 	}
 	if !containsAttr(hcl, "id", `"conv_model_1"`) {
