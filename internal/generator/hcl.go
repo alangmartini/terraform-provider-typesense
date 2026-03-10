@@ -10,6 +10,13 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
+const clusterSectionMutabilityComment = `# Cluster update behavior:
+# - In-place via PATCH: name, auto_upgrade_capacity
+# - In-place via configuration changes: memory, vcpu, high_availability, typesense_server_version
+# - Requires a new cluster: regions, search_delivery_network
+
+`
+
 // generateTerraformBlock creates the terraform required_providers block
 func generateTerraformBlock(f *hclwrite.File) {
 	tfBlock := f.Body().AppendNewBlock("terraform", nil)

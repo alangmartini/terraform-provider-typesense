@@ -264,6 +264,21 @@ func TestGenerateClusterBlock(t *testing.T) {
 	}
 }
 
+func TestClusterSectionMutabilityComment(t *testing.T) {
+	f := hclwrite.NewEmptyFile()
+	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte(clusterSectionMutabilityComment)},
+	})
+	hcl := string(f.Bytes())
+
+	if !strings.Contains(hcl, "Requires a new cluster: regions, search_delivery_network") {
+		t.Error("Cluster section comment should mention creation-time-only settings")
+	}
+	if !strings.Contains(hcl, "In-place via configuration changes: memory, vcpu, high_availability, typesense_server_version") {
+		t.Error("Cluster section comment should mention configuration-change-managed settings")
+	}
+}
+
 func TestGenerateAnalyticsRuleBlock(t *testing.T) {
 	rule := &client.AnalyticsRule{
 		Name:       "popular_searches",
