@@ -9,6 +9,7 @@ import (
 	"github.com/alanm/terraform-provider-typesense/internal/client"
 	"github.com/alanm/terraform-provider-typesense/internal/datasources"
 	"github.com/alanm/terraform-provider-typesense/internal/resources"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
 	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -46,7 +47,7 @@ type TypesenseProviderModel struct {
 type ProviderData = providertypes.ProviderData
 
 func (p *TypesenseProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "typesense"
+	resp.TypeName = tfnames.ProviderTypeName
 	resp.Version = p.version
 }
 

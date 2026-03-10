@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
 	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -44,7 +45,7 @@ type ConversationModelResourceModel struct {
 }
 
 func (r *ConversationModelResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_conversation_model"
+	resp.TypeName = tfnames.TypeName(req.ProviderTypeName, tfnames.ResourceConversationModel)
 }
 
 func (r *ConversationModelResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -132,7 +133,7 @@ func (r *ConversationModelResource) Configure(ctx context.Context, req resource.
 }
 
 func (r *ConversationModelResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	if diags := version.CheckVersionRequirement(r.featureChecker, version.FeatureConversationModels, "typesense_conversation_model"); diags.HasError() {
+	if diags := version.CheckVersionRequirement(r.featureChecker, version.FeatureConversationModels, tfnames.FullTypeName(tfnames.ResourceConversationModel)); diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
 	}

@@ -3,17 +3,19 @@ package version
 import (
 	"strings"
 	"testing"
+
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 )
 
 func TestParse(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		wantMajor  int
-		wantMinor  int
-		wantPatch  int
-		wantPre    string
-		wantErr    bool
+		name      string
+		input     string
+		wantMajor int
+		wantMinor int
+		wantPatch int
+		wantPre   string
+		wantErr   bool
 	}{
 		{
 			name:      "simple two-part version",
@@ -406,7 +408,7 @@ func TestWellKnownVersions(t *testing.T) {
 func TestCheckVersionRequirement(t *testing.T) {
 	t.Run("returns error when version is too old", func(t *testing.T) {
 		checker := NewFeatureChecker(MustParse("26.0"))
-		diags := CheckVersionRequirement(checker, FeaturePresets, "typesense_preset")
+		diags := CheckVersionRequirement(checker, FeaturePresets, tfnames.FullTypeName(tfnames.ResourcePreset))
 		if !diags.HasError() {
 			t.Fatal("expected error diagnostic, got none")
 		}
@@ -417,14 +419,14 @@ func TestCheckVersionRequirement(t *testing.T) {
 		if !strings.Contains(errMsg, "v26.0") {
 			t.Errorf("error should mention current server version v26.0, got: %s", errMsg)
 		}
-		if !strings.Contains(errMsg, "typesense_preset") {
+		if !strings.Contains(errMsg, tfnames.FullTypeName(tfnames.ResourcePreset)) {
 			t.Errorf("error should mention resource name, got: %s", errMsg)
 		}
 	})
 
 	t.Run("returns nil when version meets requirement", func(t *testing.T) {
 		checker := NewFeatureChecker(MustParse("27.0"))
-		diags := CheckVersionRequirement(checker, FeaturePresets, "typesense_preset")
+		diags := CheckVersionRequirement(checker, FeaturePresets, tfnames.FullTypeName(tfnames.ResourcePreset))
 		if diags.HasError() {
 			t.Errorf("expected no error, got: %v", diags)
 		}
@@ -432,7 +434,7 @@ func TestCheckVersionRequirement(t *testing.T) {
 
 	t.Run("returns nil when version exceeds requirement", func(t *testing.T) {
 		checker := NewFeatureChecker(MustParse("30.0"))
-		diags := CheckVersionRequirement(checker, FeaturePresets, "typesense_preset")
+		diags := CheckVersionRequirement(checker, FeaturePresets, tfnames.FullTypeName(tfnames.ResourcePreset))
 		if diags.HasError() {
 			t.Errorf("expected no error, got: %v", diags)
 		}
@@ -440,7 +442,7 @@ func TestCheckVersionRequirement(t *testing.T) {
 
 	t.Run("skips check when version is unknown (fallback)", func(t *testing.T) {
 		checker := NewFallbackFeatureChecker()
-		diags := CheckVersionRequirement(checker, FeaturePresets, "typesense_preset")
+		diags := CheckVersionRequirement(checker, FeaturePresets, tfnames.FullTypeName(tfnames.ResourcePreset))
 		if diags != nil {
 			t.Errorf("expected nil diagnostics for fallback checker, got: %v", diags)
 		}
@@ -448,7 +450,7 @@ func TestCheckVersionRequirement(t *testing.T) {
 
 	t.Run("skips check when version is nil", func(t *testing.T) {
 		checker := NewFeatureChecker(nil)
-		diags := CheckVersionRequirement(checker, FeaturePresets, "typesense_preset")
+		diags := CheckVersionRequirement(checker, FeaturePresets, tfnames.FullTypeName(tfnames.ResourcePreset))
 		if diags != nil {
 			t.Errorf("expected nil diagnostics for nil version, got: %v", diags)
 		}
@@ -456,17 +458,17 @@ func TestCheckVersionRequirement(t *testing.T) {
 
 	t.Run("error message for each feature type", func(t *testing.T) {
 		featureTests := []struct {
-			feature      Feature
-			resource     string
-			tooOld       string
-			wantVersion  string
+			feature     Feature
+			resource    string
+			tooOld      string
+			wantVersion string
 		}{
-			{FeatureConversationModels, "typesense_conversation_model", "25.0", "v26.0+"},
-			{FeaturePresets, "typesense_preset", "26.0", "v27.0+"},
-			{FeatureStopwords, "typesense_stopwords_set", "26.0", "v27.0+"},
-			{FeatureAnalyticsRules, "typesense_analytics_rule", "27.0", "v28.0+"},
-			{FeatureNLSearchModels, "typesense_nl_search_model", "28.0", "v29.0+"},
-			{FeatureStemmingDictionaries, "typesense_stemming_dictionary", "28.0", "v29.0+"},
+			{FeatureConversationModels, tfnames.FullTypeName(tfnames.ResourceConversationModel), "25.0", "v26.0+"},
+			{FeaturePresets, tfnames.FullTypeName(tfnames.ResourcePreset), "26.0", "v27.0+"},
+			{FeatureStopwords, tfnames.FullTypeName(tfnames.ResourceStopwordsSet), "26.0", "v27.0+"},
+			{FeatureAnalyticsRules, tfnames.FullTypeName(tfnames.ResourceAnalyticsRule), "27.0", "v28.0+"},
+			{FeatureNLSearchModels, tfnames.FullTypeName(tfnames.ResourceNLSearchModel), "28.0", "v29.0+"},
+			{FeatureStemmingDictionaries, tfnames.FullTypeName(tfnames.ResourceStemmingDictionary), "28.0", "v29.0+"},
 		}
 
 		for _, tt := range featureTests {

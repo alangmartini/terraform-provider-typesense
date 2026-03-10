@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -40,7 +41,7 @@ type ClusterConfigChangeResourceModel struct {
 }
 
 func (r *ClusterConfigChangeResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_cluster_config_change"
+	resp.TypeName = tfnames.TypeName(req.ProviderTypeName, tfnames.ResourceClusterConfigChange)
 }
 
 func (r *ClusterConfigChangeResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {

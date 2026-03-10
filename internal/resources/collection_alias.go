@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -35,7 +36,7 @@ type CollectionAliasResourceModel struct {
 }
 
 func (r *CollectionAliasResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_collection_alias"
+	resp.TypeName = tfnames.TypeName(req.ProviderTypeName, tfnames.ResourceCollectionAlias)
 }
 
 func (r *CollectionAliasResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {

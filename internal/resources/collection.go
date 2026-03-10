@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -115,7 +116,7 @@ func fieldAttrTypes() map[string]attr.Type {
 }
 
 func (r *CollectionResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_collection"
+	resp.TypeName = tfnames.TypeName(req.ProviderTypeName, tfnames.ResourceCollection)
 }
 
 func (r *CollectionResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {

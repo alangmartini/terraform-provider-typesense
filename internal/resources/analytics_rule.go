@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 	providertypes "github.com/alanm/terraform-provider-typesense/internal/types"
 	"github.com/alanm/terraform-provider-typesense/internal/version"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -41,7 +42,7 @@ type AnalyticsRuleResourceModel struct {
 }
 
 func (r *AnalyticsRuleResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_analytics_rule"
+	resp.TypeName = tfnames.TypeName(req.ProviderTypeName, tfnames.ResourceAnalyticsRule)
 }
 
 func (r *AnalyticsRuleResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -113,7 +114,7 @@ func (r *AnalyticsRuleResource) Configure(ctx context.Context, req resource.Conf
 }
 
 func (r *AnalyticsRuleResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	if diags := version.CheckVersionRequirement(r.featureChecker, version.FeatureAnalyticsRules, "typesense_analytics_rule"); diags.HasError() {
+	if diags := version.CheckVersionRequirement(r.featureChecker, version.FeatureAnalyticsRules, tfnames.FullTypeName(tfnames.ResourceAnalyticsRule)); diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
 	}
