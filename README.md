@@ -205,6 +205,8 @@ terraform plan   # Verify no drift
 | `typesense_cluster` | Create and manage Typesense Cloud clusters |
 | `typesense_cluster_config_change` | Schedule cluster configuration changes |
 
+> **Note:** `regions` and `search_delivery_network` are set at cluster creation time and **cannot be changed via the API**. Changing either value will cause Terraform to recreate the cluster.
+
 ### Server Resources
 
 | Resource | Purpose |

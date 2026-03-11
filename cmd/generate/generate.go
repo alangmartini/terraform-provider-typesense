@@ -25,6 +25,7 @@ func Run(args []string) error {
 
 	// Output flags
 	output := fs.String("output", "./generated", "Output directory for generated files")
+	singleFile := fs.Bool("single-file", false, "Write all resources to a single main.tf instead of separate files")
 
 	// Data export flags
 	includeData := fs.Bool("include-data", false, "Export document data to JSONL files for migration")
@@ -60,6 +61,12 @@ Examples:
     --host=source.typesense.net --port=443 --protocol=https --api-key=xyz \
     --include-data \
     --output=./migration
+
+  # Generate all resources in a single file
+  terraform-provider-typesense generate \
+    --host=localhost --api-key=xyz \
+    --single-file \
+    --output=./generated
 `)
 	}
 
@@ -88,6 +95,7 @@ Examples:
 		APIKey:      *apiKey,
 		CloudAPIKey: *cloudAPIKey,
 		OutputDir:   *output,
+		SingleFile:  *singleFile,
 		IncludeData: *includeData,
 	}
 
@@ -100,8 +108,16 @@ Examples:
 	}
 	if hasCloudConfig {
 		fmt.Printf("  Cloud: Typesense Cloud API\n")
+		if hasServerConfig {
+			fmt.Printf("  Scope: cluster matching %s\n", *host)
+		}
 	}
 	fmt.Printf("  Output: %s\n", *output)
+	if *singleFile {
+		fmt.Printf("  Mode: single file (main.tf)\n")
+	} else {
+		fmt.Printf("  Mode: multi-file (split by resource type)\n")
+	}
 	if *includeData {
 		fmt.Println()
 		fmt.Println("  ┌─────────────────────────────────────────────────────────────────┐")
@@ -125,11 +141,26 @@ Examples:
 		return fmt.Errorf("generation failed: %w", err)
 	}
 
-	fmt.Printf("Generated files:\n")
-	fmt.Printf("  %s/main.tf     - Terraform configuration\n", *output)
-	fmt.Printf("  %s/imports.sh  - Import commands script\n", *output)
+	if *singleFile {
+		fmt.Printf("Generated files:\n")
+		fmt.Printf("  %s/main.tf     - Terraform configuration\n", *output)
+	} else {
+		fmt.Printf("Generated files:\n")
+		fmt.Printf("  %s/main.tf           - Provider configuration\n", *output)
+		if hasCloudConfig {
+			fmt.Printf("  %s/cluster.tf        - Cluster resources\n", *output)
+		}
+		if hasServerConfig {
+			fmt.Printf("  %s/collections.tf    - Collection schemas\n", *output)
+			fmt.Printf("  %s/api_keys.tf       - API key resources\n", *output)
+			fmt.Printf("  %s/analytics.tf      - Analytics rules\n", *output)
+			fmt.Printf("  %s/stopwords.tf      - Stopwords sets\n", *output)
+			fmt.Printf("  %s/...               - Other resource files\n", *output)
+		}
+	}
+	fmt.Printf("  %s/imports.sh        - Import commands script\n", *output)
 	if *includeData {
-		fmt.Printf("  %s/data/*.jsonl - Document data files\n", *output)
+		fmt.Printf("  %s/data/*.jsonl      - Document data files\n", *output)
 	}
 	fmt.Println()
 

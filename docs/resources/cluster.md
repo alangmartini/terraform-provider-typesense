@@ -114,7 +114,13 @@ resource "typesense_cluster" "development" {
 
 ## In-Place Configuration Changes
 
-Changing `memory`, `vcpu`, `high_availability`, or `typesense_server_version` on an existing cluster will automatically trigger the Typesense Cloud [configuration change API](https://cloud.typesense.org/docs/api#configuration-changes). Terraform will wait for the cluster to return to `in_service` status before completing the apply.
+Typesense Cloud supports three update paths for the fields in this resource:
+
+- Direct cluster updates: `name`, `auto_upgrade_capacity`
+- Configuration changes API: `memory`, `vcpu`, `high_availability`, `typesense_server_version`
+- Replacement only: `regions`, `search_delivery_network`
+
+Changing `memory`, `vcpu`, `high_availability`, or `typesense_server_version` on an existing cluster will automatically trigger the Typesense Cloud [configuration change API](https://typesense.org/docs/cloud-cluster-api/configuration-changes.html). Terraform will wait for the cluster to return to `in_service` status before completing the apply.
 
 ```terraform
 # Simply update the values — no separate config change resource needed
@@ -129,6 +135,10 @@ resource "typesense_cluster" "production" {
 ```
 
 ~> **Note:** For scheduled configuration changes (via `perform_change_at`), use the [`typesense_cluster_config_change`](cluster_config_change.md) resource instead.
+
+~> **Note:** Typesense Cloud treats `regions` and `search_delivery_network` as creation-time settings. Changing either one recreates the cluster.
+
+~> **Note:** Typesense Cloud documentation also notes that High Availability can be enabled or changed via configuration changes, but once enabled it cannot be turned off without recreating the cluster.
 
 ## Import
 

@@ -106,6 +106,8 @@ output "admin_api_key" {
 }
 ```
 
+`regions` and `search_delivery_network` are creation-time settings in Typesense Cloud. Changing either one recreates the cluster.
+
 ### Combined Configuration
 
 You can configure both Cloud and Server management in a single provider block:

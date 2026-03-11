@@ -35,25 +35,26 @@ func NewCloudClient(apiKey string) *CloudClient {
 
 // Cluster represents a Typesense Cloud cluster
 type Cluster struct {
-	ID                     string            `json:"id,omitempty"`
-	Name                   string            `json:"name"`
-	Memory                 string            `json:"memory"`
-	VCPU                   string            `json:"vcpu"`
-	HighAvailability       string            `json:"high_availability"`
-	SearchDeliveryNetwork  string            `json:"search_delivery_network,omitempty"`
-	TypesenseServerVersion string            `json:"typesense_server_version"`
-	Regions                []string          `json:"regions"`
-	Status                 string            `json:"status,omitempty"`
-	Hostnames              ClusterHostnames  `json:"hostnames,omitempty"`
-	APIKeys                *ClusterAPIKeys   `json:"api_keys,omitempty"`
-	AutoUpgradeCapacity    bool              `json:"auto_upgrade_capacity,omitempty"`
-	CreatedAt              string            `json:"created_at,omitempty"`
+	ID                     string           `json:"id,omitempty"`
+	Name                   string           `json:"name"`
+	Memory                 string           `json:"memory"`
+	VCPU                   string           `json:"vcpu"`
+	HighAvailability       string           `json:"high_availability"`
+	SearchDeliveryNetwork  string           `json:"search_delivery_network,omitempty"`
+	TypesenseServerVersion string           `json:"typesense_server_version"`
+	Regions                []string         `json:"regions"`
+	Status                 string           `json:"status,omitempty"`
+	Hostnames              ClusterHostnames `json:"hostnames,omitempty"`
+	APIKeys                *ClusterAPIKeys  `json:"api_keys,omitempty"`
+	AutoUpgradeCapacity    bool             `json:"auto_upgrade_capacity,omitempty"`
+	CreatedAt              string           `json:"created_at,omitempty"`
 }
 
 // ClusterHostnames contains cluster endpoint information
 type ClusterHostnames struct {
-	LoadBalanced string   `json:"load_balanced,omitempty"`
-	Nodes        []string `json:"nodes,omitempty"`
+	SearchDeliveryNetwork string   `json:"search_delivery_network,omitempty"`
+	LoadBalanced          string   `json:"load_balanced,omitempty"`
+	Nodes                 []string `json:"nodes,omitempty"`
 }
 
 // ClusterAPIKeys contains the cluster's API keys
@@ -65,14 +66,14 @@ type ClusterAPIKeys struct {
 
 // ClusterConfigChange represents a scheduled configuration change
 type ClusterConfigChange struct {
-	ID                     string `json:"id,omitempty"`
-	ClusterID              string `json:"cluster_id"`
-	NewMemory              string `json:"new_memory,omitempty"`
-	NewVCPU                string `json:"new_vcpu,omitempty"`
-	NewHighAvailability    string `json:"new_high_availability,omitempty"`
-	NewTypesenseVersion    string `json:"new_typesense_server_version,omitempty"`
-	PerformChangeAt        int64  `json:"perform_change_at,omitempty"`
-	Status                 string `json:"status,omitempty"`
+	ID                  string `json:"id,omitempty"`
+	ClusterID           string `json:"cluster_id"`
+	NewMemory           string `json:"new_memory,omitempty"`
+	NewVCPU             string `json:"new_vcpu,omitempty"`
+	NewHighAvailability string `json:"new_high_availability,omitempty"`
+	NewTypesenseVersion string `json:"new_typesense_server_version,omitempty"`
+	PerformChangeAt     int64  `json:"perform_change_at,omitempty"`
+	Status              string `json:"status,omitempty"`
 }
 
 // CreateCluster creates a new Typesense Cloud cluster
