@@ -128,16 +128,16 @@ This creates:
 | File | Contents |
 |------|----------|
 | `main.tf` | All resources as Terraform configuration |
-| `imports.sh` | `terraform import` commands for every resource |
+| `imports.tf` | Import blocks for every resource (Terraform 1.5+) |
 
 Then import into Terraform state:
 
 ```bash
 cd my-typesense-config
 terraform init
-chmod +x imports.sh
-./imports.sh
-terraform plan   # Should show "No changes"
+terraform apply   # Imports existing resources via imports.tf
+terraform plan    # Should show "No changes"
+rm imports.tf     # No longer needed after import
 ```
 
 ### Importing Individual Resources
