@@ -158,7 +158,7 @@ Examples:
 			fmt.Printf("  %s/...               - Other resource files\n", *output)
 		}
 	}
-	fmt.Printf("  %s/imports.sh        - Import commands script\n", *output)
+	fmt.Printf("  %s/imports.tf        - Import blocks (Terraform 1.5+)\n", *output)
 	if *includeData {
 		fmt.Printf("  %s/data/*.jsonl      - Document data files\n", *output)
 	}
@@ -175,8 +175,9 @@ Examples:
 		fmt.Printf("  1. cd %s\n", *output)
 		fmt.Printf("  2. Review and update main.tf (especially API key placeholder)\n")
 		fmt.Printf("  3. terraform init\n")
-		fmt.Printf("  4. ./imports.sh  # Import existing resources\n")
-		fmt.Printf("  5. terraform plan  # Should show no changes\n")
+		fmt.Printf("  4. terraform apply  # Imports existing resources via imports.tf\n")
+		fmt.Printf("  5. terraform plan   # Should show no changes\n")
+		fmt.Printf("  6. Remove imports.tf (no longer needed after import)\n")
 	}
 
 	return nil

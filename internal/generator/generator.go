@@ -199,11 +199,13 @@ func (g *Generator) Generate(ctx context.Context) error {
 		}
 	}
 
-	// Write imports.sh
-	importsPath := filepath.Join(g.config.OutputDir, "imports.sh")
-	importScript := GenerateImportScript(importCommands)
-	if err := os.WriteFile(importsPath, []byte(importScript), 0755); err != nil {
-		return fmt.Errorf("failed to write imports.sh: %w", err)
+	// Write imports.tf with HCL import blocks (Terraform 1.5+)
+	if len(importCommands) > 0 {
+		importsPath := filepath.Join(g.config.OutputDir, "imports.tf")
+		importFile := GenerateImportBlocks(importCommands)
+		if err := os.WriteFile(importsPath, importFile.Bytes(), 0644); err != nil {
+			return fmt.Errorf("failed to write imports.tf: %w", err)
+		}
 	}
 
 	return nil
