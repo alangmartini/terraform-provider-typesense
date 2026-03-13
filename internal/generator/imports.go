@@ -3,7 +3,10 @@ package generator
 import (
 	"fmt"
 	"strconv"
-	"strings"
+
+	hcl "github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/zclconf/go-cty/cty"
 )
 
 // ImportCommand represents a terraform import command
@@ -13,26 +16,41 @@ type ImportCommand struct {
 	ImportID     string
 }
 
-// GenerateImportScript creates a shell script containing all terraform import commands
-func GenerateImportScript(commands []ImportCommand) string {
-	var sb strings.Builder
+// GenerateImportBlocks creates HCL import blocks for all resources.
+// These use the Terraform 1.5+ import block syntax, allowing
+// `terraform apply` to import existing resources declaratively.
+func GenerateImportBlocks(commands []ImportCommand) *hclwrite.File {
+	f := hclwrite.NewEmptyFile()
 
-	sb.WriteString("#!/bin/bash\n")
-	sb.WriteString("# Generated Terraform import commands\n")
-	sb.WriteString("# Run this script after 'terraform init' to import existing resources\n")
-	sb.WriteString("\n")
-	sb.WriteString("set -e\n")
-	sb.WriteString("\n")
+	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte("# Generated Terraform import blocks\n# Run 'terraform apply' after 'terraform init' to import existing resources.\n# Once imported, you can remove this file.\n\n")},
+	})
 
-	for _, cmd := range commands {
-		sb.WriteString(fmt.Sprintf("terraform import %s.%s %q\n",
-			cmd.ResourceType, cmd.ResourceName, cmd.ImportID))
+	for i, cmd := range commands {
+		block := hclwrite.NewBlock("import", nil)
+		block.Body().SetAttributeValue("to", cty.StringVal(fmt.Sprintf("%s.%s", cmd.ResourceType, cmd.ResourceName)))
+		block.Body().SetAttributeValue("id", cty.StringVal(cmd.ImportID))
+
+		// The "to" attribute must be a resource reference, not a string.
+		// hclwrite.SetAttributeValue wraps it in quotes, so we use raw tokens instead.
+		block.Body().RemoveAttribute("to")
+		block.Body().SetAttributeRaw("to", hclwrite.TokensForTraversal(hclAbsTraversal(cmd.ResourceType, cmd.ResourceName)))
+
+		f.Body().AppendBlock(block)
+		if i < len(commands)-1 {
+			f.Body().AppendNewline()
+		}
 	}
 
-	sb.WriteString("\n")
-	sb.WriteString("echo \"Import complete!\"\n")
+	return f
+}
 
-	return sb.String()
+// hclAbsTraversal builds a two-part traversal: resourceType.resourceName
+func hclAbsTraversal(resourceType, resourceName string) hcl.Traversal {
+	return hcl.Traversal{
+		hcl.TraverseRoot{Name: resourceType},
+		hcl.TraverseAttr{Name: resourceName},
+	}
 }
 
 // CollectionImportID returns the import ID for a collection
