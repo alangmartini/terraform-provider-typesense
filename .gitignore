@@ -13,6 +13,8 @@ terraform.tfvars.json
 
 # Generated/exported configs
 exported/
+tmp/
+.omx/
 
 # Test data
 typesense-test-data/
