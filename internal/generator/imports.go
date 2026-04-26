@@ -73,6 +73,21 @@ func StopwordsImportID(id string) string {
 	return id
 }
 
+// CollectionAliasImportID returns the import ID for a collection alias
+func CollectionAliasImportID(name string) string {
+	return name
+}
+
+// PresetImportID returns the import ID for a preset
+func PresetImportID(name string) string {
+	return name
+}
+
+// StemmingDictionaryImportID returns the import ID for a stemming dictionary
+func StemmingDictionaryImportID(id string) string {
+	return id
+}
+
 // ClusterImportID returns the import ID for a cluster
 func ClusterImportID(id string) string {
 	return id

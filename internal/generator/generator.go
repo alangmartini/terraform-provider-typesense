@@ -158,8 +158,16 @@ func (g *Generator) Generate(ctx context.Context) error {
 			return fmt.Errorf("failed to generate collections: %w", err)
 		}
 
+		if err := g.generateCollectionAliases(ctx, fs.get("aliases.tf"), resourceNames, &importCommands); err != nil {
+			return fmt.Errorf("failed to generate collection aliases: %w", err)
+		}
+
 		if err := g.generateStopwords(ctx, fs.get("stopwords.tf"), resourceNames, &importCommands); err != nil {
 			return fmt.Errorf("failed to generate stopwords: %w", err)
+		}
+
+		if err := g.generateStemmingDictionaries(ctx, fs.get("stemming.tf"), resourceNames, &importCommands); err != nil {
+			return fmt.Errorf("failed to generate stemming dictionaries: %w", err)
 		}
 
 		if err := g.generateSynonyms(ctx, fs.get("synonyms.tf"), resourceNames, collectionResourceMap, &importCommands); err != nil {
@@ -168,6 +176,10 @@ func (g *Generator) Generate(ctx context.Context) error {
 
 		if err := g.generateOverrides(ctx, fs.get("overrides.tf"), resourceNames, collectionResourceMap, &importCommands); err != nil {
 			return fmt.Errorf("failed to generate overrides: %w", err)
+		}
+
+		if err := g.generatePresets(ctx, fs.get("presets.tf"), resourceNames, &importCommands); err != nil {
+			return fmt.Errorf("failed to generate presets: %w", err)
 		}
 
 		if err := g.generateAnalyticsRules(ctx, fs.get("analytics.tf"), resourceNames, &importCommands); err != nil {
@@ -482,6 +494,36 @@ func (g *Generator) generateCollections(ctx context.Context, f *hclwrite.File, r
 	return nil
 }
 
+func (g *Generator) generateCollectionAliases(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
+	aliases, err := g.serverClient.ListCollectionAliases(ctx)
+	if err != nil {
+		return err
+	}
+
+	if len(aliases) == 0 {
+		return nil
+	}
+
+	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte("# ============================================\n# COLLECTION ALIASES\n# ============================================\n\n")},
+	})
+
+	for _, alias := range aliases {
+		resourceName := MakeUniqueResourceName(alias.Name, resourceNames)
+		block := generateCollectionAliasBlock(&alias, resourceName)
+		f.Body().AppendBlock(block)
+		f.Body().AppendNewline()
+
+		*importCommands = append(*importCommands, ImportCommand{
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceCollectionAlias),
+			ResourceName: resourceName,
+			ImportID:     CollectionAliasImportID(alias.Name),
+		})
+	}
+
+	return nil
+}
+
 func (g *Generator) generateStopwords(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
 	stopwordsSets, err := g.serverClient.ListStopwordsSets(ctx)
 	if err != nil {
@@ -521,10 +563,46 @@ func (g *Generator) generateStopwords(ctx context.Context, f *hclwrite.File, res
 	return nil
 }
 
+func (g *Generator) generateStemmingDictionaries(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
+	if g.serverVersion != nil && !g.featureChecker.SupportsFeature(version.FeatureStemmingDictionaries) {
+		return nil
+	}
+
+	dictionaries, err := g.serverClient.ListStemmingDictionaries(ctx)
+	if err != nil {
+		// Stemming dictionaries are only available on newer Typesense versions.
+		fmt.Fprintf(os.Stderr, "Warning: Could not list stemming dictionaries: %v\n", err)
+		return nil
+	}
+
+	if len(dictionaries) == 0 {
+		return nil
+	}
+
+	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte("# ============================================\n# STEMMING DICTIONARIES\n# ============================================\n\n")},
+	})
+
+	for _, dictionary := range dictionaries {
+		resourceName := MakeUniqueResourceName(dictionary.ID, resourceNames)
+		block := generateStemmingDictionaryBlock(&dictionary, resourceName)
+		f.Body().AppendBlock(block)
+		f.Body().AppendNewline()
+
+		*importCommands = append(*importCommands, ImportCommand{
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceStemmingDictionary),
+			ResourceName: resourceName,
+			ImportID:     StemmingDictionaryImportID(dictionary.ID),
+		})
+	}
+
+	return nil
+}
+
 func (g *Generator) generateSynonyms(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, collectionResourceMap map[string]string, importCommands *[]ImportCommand) error {
 	// Use version-aware API selection
 	if g.featureChecker.SupportsFeature(version.FeatureSynonymSets) {
-		return g.generateSynonymSetsV30(ctx, f, resourceNames)
+		return g.generateSynonymSetsV30(ctx, f, resourceNames, importCommands)
 	}
 
 	// For v29 and earlier, or when version detection failed (fallback)
@@ -533,7 +611,7 @@ func (g *Generator) generateSynonyms(ctx context.Context, f *hclwrite.File, reso
 }
 
 // generateSynonymSetsV30 handles synonym generation for Typesense v30.0+ using the /synonym_sets API
-func (g *Generator) generateSynonymSetsV30(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool) error {
+func (g *Generator) generateSynonymSetsV30(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
 	synonymSets, err := g.serverClient.ListSynonymSets(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list synonym sets: %w", err)
@@ -552,16 +630,7 @@ func (g *Generator) generateSynonymSetsV30(ctx context.Context, f *hclwrite.File
 		{Type: 4, Bytes: []byte(fmt.Sprintf("# ============================================\n# SYNONYM SETS (Typesense v30.0+)%s\n# Note: Synonym sets are now system-level, not per-collection\n# ============================================\n\n", versionStr))},
 	})
 
-	for _, synSet := range synonymSets {
-		resourceName := MakeUniqueResourceName("synonym_set_"+synSet.Name, resourceNames)
-		// TODO: Generate synonym set blocks when the Terraform resource is implemented
-		// For now, add a comment noting the synonym set exists
-		comment := fmt.Sprintf("# Synonym set: %s (Terraform resource not yet implemented)\n\n", synSet.Name)
-		f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
-			{Type: 4, Bytes: []byte(comment)},
-		})
-		_ = resourceName // Silence unused variable warning
-	}
+	g.appendSynonymSetResources(f, synonymSets, resourceNames, importCommands)
 
 	return nil
 }
@@ -598,7 +667,7 @@ func (g *Generator) generatePerCollectionSynonyms(ctx context.Context, f *hclwri
 	if len(allSynonyms) == 0 {
 		// If version detection failed and we got no synonyms, try the v30 API as fallback
 		if g.serverVersion == nil {
-			return g.generateSynonymSetsV30Fallback(ctx, f, resourceNames)
+			return g.generateSynonymSetsV30Fallback(ctx, f, resourceNames, importCommands)
 		}
 		return nil
 	}
@@ -631,7 +700,7 @@ func (g *Generator) generatePerCollectionSynonyms(ctx context.Context, f *hclwri
 
 // generateSynonymSetsV30Fallback tries the v30 API when version detection failed
 // and per-collection synonyms returned nothing
-func (g *Generator) generateSynonymSetsV30Fallback(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool) error {
+func (g *Generator) generateSynonymSetsV30Fallback(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
 	synonymSets, err := g.serverClient.ListSynonymSets(ctx)
 	if err != nil || synonymSets == nil || len(synonymSets) == 0 {
 		// Either failed or no synonym sets - that's fine
@@ -643,22 +712,37 @@ func (g *Generator) generateSynonymSetsV30Fallback(ctx context.Context, f *hclwr
 		{Type: 4, Bytes: []byte("# ============================================\n# SYNONYM SETS (Typesense v30.0+)\n# Note: Synonym sets are now system-level, not per-collection\n# ============================================\n\n")},
 	})
 
-	for _, synSet := range synonymSets {
-		resourceName := MakeUniqueResourceName("synonym_set_"+synSet.Name, resourceNames)
-		comment := fmt.Sprintf("# Synonym set: %s (Terraform resource not yet implemented)\n\n", synSet.Name)
-		f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
-			{Type: 4, Bytes: []byte(comment)},
-		})
-		_ = resourceName
-	}
+	g.appendSynonymSetResources(f, synonymSets, resourceNames, importCommands)
 
 	return nil
+}
+
+func (g *Generator) appendSynonymSetResources(f *hclwrite.File, synonymSets []client.SynonymSet, resourceNames map[string]bool, importCommands *[]ImportCommand) {
+	for _, synSet := range synonymSets {
+		for _, item := range synSet.Synonyms {
+			synonym := &client.Synonym{
+				ID:       item.ID,
+				Root:     item.Root,
+				Synonyms: item.Synonyms,
+			}
+			resourceName := MakeUniqueResourceName(synSet.Name+"_"+item.ID, resourceNames)
+			block := generateSynonymBlockWithCollectionLiteral(synonym, synSet.Name, resourceName)
+			f.Body().AppendBlock(block)
+			f.Body().AppendNewline()
+
+			*importCommands = append(*importCommands, ImportCommand{
+				ResourceType: tfnames.FullTypeName(tfnames.ResourceSynonym),
+				ResourceName: resourceName,
+				ImportID:     SynonymImportID(synSet.Name, item.ID),
+			})
+		}
+	}
 }
 
 func (g *Generator) generateOverrides(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, collectionResourceMap map[string]string, importCommands *[]ImportCommand) error {
 	// Use version-aware API selection
 	if g.featureChecker.SupportsFeature(version.FeatureCurationSets) {
-		return g.generateCurationSetsV30(ctx, f, resourceNames)
+		return g.generateCurationSetsV30(ctx, f, resourceNames, importCommands)
 	}
 
 	// For v29 and earlier, or when version detection failed (fallback)
@@ -666,7 +750,7 @@ func (g *Generator) generateOverrides(ctx context.Context, f *hclwrite.File, res
 }
 
 // generateCurationSetsV30 handles override generation for Typesense v30.0+ using the /curation_sets API
-func (g *Generator) generateCurationSetsV30(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool) error {
+func (g *Generator) generateCurationSetsV30(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
 	curationSets, err := g.serverClient.ListCurationSets(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list curation sets: %w", err)
@@ -685,16 +769,7 @@ func (g *Generator) generateCurationSetsV30(ctx context.Context, f *hclwrite.Fil
 		{Type: 4, Bytes: []byte(fmt.Sprintf("# ============================================\n# CURATION SETS (Typesense v30.0+)%s\n# Note: Curation sets (formerly overrides) are now system-level, not per-collection\n# ============================================\n\n", versionStr))},
 	})
 
-	for _, curSet := range curationSets {
-		resourceName := MakeUniqueResourceName("curation_set_"+curSet.Name, resourceNames)
-		// TODO: Generate curation set blocks when the Terraform resource is implemented
-		// For now, add a comment noting the curation set exists
-		comment := fmt.Sprintf("# Curation set: %s (Terraform resource not yet implemented)\n\n", curSet.Name)
-		f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
-			{Type: 4, Bytes: []byte(comment)},
-		})
-		_ = resourceName // Silence unused variable warning
-	}
+	g.appendCurationSetResources(f, curationSets, resourceNames, importCommands)
 
 	return nil
 }
@@ -731,7 +806,7 @@ func (g *Generator) generatePerCollectionOverrides(ctx context.Context, f *hclwr
 	if len(allOverrides) == 0 {
 		// If version detection failed and we got no overrides, try the v30 API as fallback
 		if g.serverVersion == nil {
-			return g.generateCurationSetsV30Fallback(ctx, f, resourceNames)
+			return g.generateCurationSetsV30Fallback(ctx, f, resourceNames, importCommands)
 		}
 		return nil
 	}
@@ -764,7 +839,7 @@ func (g *Generator) generatePerCollectionOverrides(ctx context.Context, f *hclwr
 
 // generateCurationSetsV30Fallback tries the v30 API when version detection failed
 // and per-collection overrides returned nothing
-func (g *Generator) generateCurationSetsV30Fallback(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool) error {
+func (g *Generator) generateCurationSetsV30Fallback(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
 	curationSets, err := g.serverClient.ListCurationSets(ctx)
 	if err != nil || curationSets == nil || len(curationSets) == 0 {
 		// Either failed or no curation sets - that's fine
@@ -776,16 +851,74 @@ func (g *Generator) generateCurationSetsV30Fallback(ctx context.Context, f *hclw
 		{Type: 4, Bytes: []byte("# ============================================\n# CURATION SETS (Typesense v30.0+)\n# Note: Curation sets (formerly overrides) are now system-level, not per-collection\n# ============================================\n\n")},
 	})
 
-	for _, curSet := range curationSets {
-		resourceName := MakeUniqueResourceName("curation_set_"+curSet.Name, resourceNames)
-		comment := fmt.Sprintf("# Curation set: %s (Terraform resource not yet implemented)\n\n", curSet.Name)
-		f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
-			{Type: 4, Bytes: []byte(comment)},
+	g.appendCurationSetResources(f, curationSets, resourceNames, importCommands)
+
+	return nil
+}
+
+func (g *Generator) generatePresets(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
+	presets, err := g.serverClient.ListPresets(ctx)
+	if err != nil {
+		return err
+	}
+
+	if len(presets) == 0 {
+		return nil
+	}
+
+	f.Body().AppendUnstructuredTokens(hclwrite.Tokens{
+		{Type: 4, Bytes: []byte("# ============================================\n# PRESETS\n# ============================================\n\n")},
+	})
+
+	for _, preset := range presets {
+		resourceName := MakeUniqueResourceName(preset.Name, resourceNames)
+		block := generatePresetBlock(&preset, resourceName)
+		f.Body().AppendBlock(block)
+		f.Body().AppendNewline()
+
+		*importCommands = append(*importCommands, ImportCommand{
+			ResourceType: tfnames.FullTypeName(tfnames.ResourcePreset),
+			ResourceName: resourceName,
+			ImportID:     PresetImportID(preset.Name),
 		})
-		_ = resourceName
 	}
 
 	return nil
+}
+
+func (g *Generator) appendCurationSetResources(f *hclwrite.File, curationSets []client.CurationSet, resourceNames map[string]bool, importCommands *[]ImportCommand) {
+	for _, curSet := range curationSets {
+		for _, item := range curSet.Curations {
+			override := curationItemToOverride(&item)
+			resourceName := MakeUniqueResourceName(curSet.Name+"_"+item.ID, resourceNames)
+			block := generateOverrideBlockWithCollectionLiteral(override, curSet.Name, resourceName)
+			f.Body().AppendBlock(block)
+			f.Body().AppendNewline()
+
+			*importCommands = append(*importCommands, ImportCommand{
+				ResourceType: tfnames.FullTypeName(tfnames.ResourceOverride),
+				ResourceName: resourceName,
+				ImportID:     OverrideImportID(curSet.Name, item.ID),
+			})
+		}
+	}
+}
+
+func curationItemToOverride(c *client.CurationItem) *client.Override {
+	return &client.Override{
+		ID:                  c.ID,
+		Rule:                c.Rule,
+		Includes:            c.Includes,
+		Excludes:            c.Excludes,
+		FilterBy:            c.FilterBy,
+		SortBy:              c.SortBy,
+		ReplaceQuery:        c.ReplaceQuery,
+		RemoveMatchedTokens: c.RemoveMatchedTokens,
+		FilterCuratedHits:   c.FilterCuratedHits,
+		EffectiveFromTs:     c.EffectiveFromTs,
+		EffectiveToTs:       c.EffectiveToTs,
+		StopProcessing:      c.StopProcessing,
+	}
 }
 
 func (g *Generator) generateAnalyticsRules(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {

@@ -44,11 +44,14 @@ var ResourceNames = []string{
 var GeneratedResourceNames = []string{
 	ResourceCluster,
 	ResourceCollection,
+	ResourceCollectionAlias,
 	ResourceStopwordsSet,
 	ResourceSynonym,
 	ResourceOverride,
+	ResourcePreset,
 	ResourceAnalyticsRule,
 	ResourceAPIKey,
+	ResourceStemmingDictionary,
 	ResourceNLSearchModel,
 	ResourceConversationModel,
 }

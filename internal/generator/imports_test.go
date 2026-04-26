@@ -132,6 +132,27 @@ func TestConversationModelImportID(t *testing.T) {
 	}
 }
 
+func TestCollectionAliasImportID(t *testing.T) {
+	id := CollectionAliasImportID("music")
+	if id != "music" {
+		t.Errorf("CollectionAliasImportID = %q, want %q", id, "music")
+	}
+}
+
+func TestPresetImportID(t *testing.T) {
+	id := PresetImportID("track-listing")
+	if id != "track-listing" {
+		t.Errorf("PresetImportID = %q, want %q", id, "track-listing")
+	}
+}
+
+func TestStemmingDictionaryImportID(t *testing.T) {
+	id := StemmingDictionaryImportID("music-terms")
+	if id != "music-terms" {
+		t.Errorf("StemmingDictionaryImportID = %q, want %q", id, "music-terms")
+	}
+}
+
 func TestImportBlocksWithNewResourceTypes(t *testing.T) {
 	commands := []ImportCommand{
 		{
@@ -154,6 +175,21 @@ func TestImportBlocksWithNewResourceTypes(t *testing.T) {
 			ResourceName: "conv_model_1",
 			ImportID:     "conv_model_1",
 		},
+		{
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceCollectionAlias),
+			ResourceName: "music",
+			ImportID:     "music",
+		},
+		{
+			ResourceType: tfnames.FullTypeName(tfnames.ResourcePreset),
+			ResourceName: "track_listing",
+			ImportID:     "track-listing",
+		},
+		{
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceStemmingDictionary),
+			ResourceName: "music_terms",
+			ImportID:     "music-terms",
+		},
 	}
 
 	f := GenerateImportBlocks(commands)
@@ -171,9 +207,18 @@ func TestImportBlocksWithNewResourceTypes(t *testing.T) {
 	if !strings.Contains(output, tfnames.FullTypeName(tfnames.ResourceConversationModel)+".conv_model_1") {
 		t.Error("Output should contain conversation model import block")
 	}
+	if !strings.Contains(output, tfnames.FullTypeName(tfnames.ResourceCollectionAlias)+".music") {
+		t.Error("Output should contain collection alias import block")
+	}
+	if !strings.Contains(output, tfnames.FullTypeName(tfnames.ResourcePreset)+".track_listing") {
+		t.Error("Output should contain preset import block")
+	}
+	if !strings.Contains(output, tfnames.FullTypeName(tfnames.ResourceStemmingDictionary)+".music_terms") {
+		t.Error("Output should contain stemming dictionary import block")
+	}
 
 	importCount := strings.Count(output, "import {")
-	if importCount != 4 {
-		t.Errorf("Expected 4 import blocks, got %d", importCount)
+	if importCount != 7 {
+		t.Errorf("Expected 7 import blocks, got %d", importCount)
 	}
 }
