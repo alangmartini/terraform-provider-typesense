@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,12 +16,12 @@ import (
 
 // ServerClient handles communication with the Typesense Server API
 type ServerClient struct {
-	httpClient    *http.Client
-	apiKey        string
-	baseURL       string
-	version       string
-	versionOnce   sync.Once
-	versionMajor  int
+	httpClient   *http.Client
+	apiKey       string
+	baseURL      string
+	version      string
+	versionOnce  sync.Once
+	versionMajor int
 }
 
 // ServerInfo contains debug/version information from the Typesense server
@@ -44,25 +45,25 @@ type SynonymItem struct {
 
 // CurationSet represents a Typesense curation set (v30.0+)
 type CurationSet struct {
-	Name       string         `json:"name"`
-	Curations  []CurationItem `json:"items,omitempty"` // API expects "items" field, not "curations"
+	Name      string         `json:"name"`
+	Curations []CurationItem `json:"items"` // API expects "items" field, not "curations"
 }
 
 // CurationItem represents a curation item within a curation set (v30.0+)
 type CurationItem struct {
-	ID                  string             `json:"id"`
-	Rule                OverrideRule       `json:"rule"`
-	Includes            []OverrideInclude  `json:"includes,omitempty"`
-	Excludes            []OverrideExclude  `json:"excludes,omitempty"`
-	FilterBy            string             `json:"filter_by,omitempty"`
-	SortBy              string             `json:"sort_by,omitempty"`
-	ReplaceQuery        string             `json:"replace_query,omitempty"`
-	RemoveMatchedTokens bool               `json:"remove_matched_tokens,omitempty"`
-	FilterCuratedHits   bool               `json:"filter_curated_hits,omitempty"`
-	EffectiveFromTs     int64              `json:"effective_from_ts,omitempty"`
-	EffectiveToTs       int64              `json:"effective_to_ts,omitempty"`
-	StopProcessing      bool               `json:"stop_processing,omitempty"`
-	Metadata            map[string]any     `json:"metadata,omitempty"`
+	ID                  string            `json:"id"`
+	Rule                OverrideRule      `json:"rule"`
+	Includes            []OverrideInclude `json:"includes,omitempty"`
+	Excludes            []OverrideExclude `json:"excludes,omitempty"`
+	FilterBy            string            `json:"filter_by,omitempty"`
+	SortBy              string            `json:"sort_by,omitempty"`
+	ReplaceQuery        string            `json:"replace_query,omitempty"`
+	RemoveMatchedTokens bool              `json:"remove_matched_tokens,omitempty"`
+	FilterCuratedHits   bool              `json:"filter_curated_hits,omitempty"`
+	EffectiveFromTs     int64             `json:"effective_from_ts,omitempty"`
+	EffectiveToTs       int64             `json:"effective_to_ts,omitempty"`
+	StopProcessing      bool              `json:"stop_processing,omitempty"`
+	Metadata            map[string]any    `json:"metadata,omitempty"`
 }
 
 // NewServerClient creates a new Server API client
@@ -75,6 +76,16 @@ func NewServerClient(host, apiKey string, port int, protocol string) *ServerClie
 		apiKey:  apiKey,
 		baseURL: baseURL,
 	}
+}
+
+func serverPath(baseURL string, segments ...string) string {
+	var b strings.Builder
+	b.WriteString(strings.TrimRight(baseURL, "/"))
+	for _, segment := range segments {
+		b.WriteByte('/')
+		b.WriteString(url.PathEscape(segment))
+	}
+	return b.String()
 }
 
 // Collection represents a Typesense collection
@@ -93,26 +104,26 @@ type Collection struct {
 
 // CollectionField represents a field in a collection schema
 type CollectionField struct {
-	Name            string            `json:"name"`
-	Type            string            `json:"type"`
-	Facet           bool              `json:"facet,omitempty"`
-	Optional        bool              `json:"optional,omitempty"`
-	Index           *bool             `json:"index,omitempty"`
-	Sort            *bool             `json:"sort,omitempty"`
-	Infix           bool              `json:"infix,omitempty"`
-	Locale          string            `json:"locale,omitempty"`
-	Drop            bool              `json:"drop,omitempty"`
-	NumDim          int64             `json:"num_dim,omitempty"`
-	VecDist         string            `json:"vec_dist,omitempty"`
-	Embed           *FieldEmbed       `json:"embed,omitempty"`
-	HnswParams      *FieldHnswParams  `json:"hnsw_params,omitempty"`
-	Reference       string            `json:"reference,omitempty"`
-	AsyncReference  *bool             `json:"async_reference,omitempty"`
-	Stem            *bool             `json:"stem,omitempty"`
-	RangeIndex      *bool             `json:"range_index,omitempty"`
-	Store           *bool             `json:"store,omitempty"`
-	TokenSeparators []string          `json:"token_separators,omitempty"`
-	SymbolsToIndex  []string          `json:"symbols_to_index,omitempty"`
+	Name            string           `json:"name"`
+	Type            string           `json:"type"`
+	Facet           bool             `json:"facet,omitempty"`
+	Optional        bool             `json:"optional,omitempty"`
+	Index           *bool            `json:"index,omitempty"`
+	Sort            *bool            `json:"sort,omitempty"`
+	Infix           bool             `json:"infix,omitempty"`
+	Locale          string           `json:"locale,omitempty"`
+	Drop            bool             `json:"drop,omitempty"`
+	NumDim          int64            `json:"num_dim,omitempty"`
+	VecDist         string           `json:"vec_dist,omitempty"`
+	Embed           *FieldEmbed      `json:"embed,omitempty"`
+	HnswParams      *FieldHnswParams `json:"hnsw_params,omitempty"`
+	Reference       string           `json:"reference,omitempty"`
+	AsyncReference  *bool            `json:"async_reference,omitempty"`
+	Stem            *bool            `json:"stem,omitempty"`
+	RangeIndex      *bool            `json:"range_index,omitempty"`
+	Store           *bool            `json:"store,omitempty"`
+	TokenSeparators []string         `json:"token_separators,omitempty"`
+	SymbolsToIndex  []string         `json:"symbols_to_index,omitempty"`
 }
 
 // FieldEmbed represents the auto-embedding configuration for a field
@@ -143,25 +154,25 @@ type Synonym struct {
 
 // Override represents a Typesense curation/override rule
 type Override struct {
-	ID                  string              `json:"id"`
-	Rule                OverrideRule        `json:"rule"`
-	Includes            []OverrideInclude   `json:"includes,omitempty"`
-	Excludes            []OverrideExclude   `json:"excludes,omitempty"`
-	FilterBy            string              `json:"filter_by,omitempty"`
-	SortBy              string              `json:"sort_by,omitempty"`
-	ReplaceQuery        string              `json:"replace_query,omitempty"`
-	RemoveMatchedTokens bool                `json:"remove_matched_tokens,omitempty"`
-	FilterCuratedHits   bool                `json:"filter_curated_hits,omitempty"`
-	EffectiveFromTs     int64               `json:"effective_from_ts,omitempty"`
-	EffectiveToTs       int64               `json:"effective_to_ts,omitempty"`
-	StopProcessing      bool                `json:"stop_processing,omitempty"`
-	Metadata            map[string]any      `json:"metadata,omitempty"`
+	ID                  string            `json:"id"`
+	Rule                OverrideRule      `json:"rule"`
+	Includes            []OverrideInclude `json:"includes,omitempty"`
+	Excludes            []OverrideExclude `json:"excludes,omitempty"`
+	FilterBy            string            `json:"filter_by,omitempty"`
+	SortBy              string            `json:"sort_by,omitempty"`
+	ReplaceQuery        string            `json:"replace_query,omitempty"`
+	RemoveMatchedTokens bool              `json:"remove_matched_tokens,omitempty"`
+	FilterCuratedHits   bool              `json:"filter_curated_hits,omitempty"`
+	EffectiveFromTs     int64             `json:"effective_from_ts,omitempty"`
+	EffectiveToTs       int64             `json:"effective_to_ts,omitempty"`
+	StopProcessing      bool              `json:"stop_processing,omitempty"`
+	Metadata            map[string]any    `json:"metadata,omitempty"`
 }
 
 // OverrideRule defines when an override should apply
 type OverrideRule struct {
-	Query string `json:"query,omitempty"`
-	Match string `json:"match,omitempty"`
+	Query string   `json:"query,omitempty"`
+	Match string   `json:"match,omitempty"`
 	Tags  []string `json:"tags,omitempty"`
 }
 
@@ -262,7 +273,7 @@ func (c *ServerClient) CreateCollection(ctx context.Context, collection *Collect
 
 // GetCollection retrieves a collection by name
 func (c *ServerClient) GetCollection(ctx context.Context, name string) (*Collection, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/collections/"+name, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, serverPath(c.baseURL, "collections", name), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -299,7 +310,7 @@ func (c *ServerClient) UpdateCollection(ctx context.Context, name string, update
 		return nil, fmt.Errorf("failed to marshal collection update: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.baseURL+"/collections/"+name, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, serverPath(c.baseURL, "collections", name), bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -327,7 +338,7 @@ func (c *ServerClient) UpdateCollection(ctx context.Context, name string, update
 
 // DeleteCollection deletes a collection
 func (c *ServerClient) DeleteCollection(ctx context.Context, name string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/collections/"+name, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, serverPath(c.baseURL, "collections", name), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -355,7 +366,7 @@ func (c *ServerClient) CreateSynonym(ctx context.Context, collectionName string,
 		return nil, fmt.Errorf("failed to marshal synonym: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/collections/%s/synonyms/%s", c.baseURL, collectionName, synonym.ID)
+	url := serverPath(c.baseURL, "collections", collectionName, "synonyms", synonym.ID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -384,7 +395,7 @@ func (c *ServerClient) CreateSynonym(ctx context.Context, collectionName string,
 
 // GetSynonym retrieves a synonym by ID
 func (c *ServerClient) GetSynonym(ctx context.Context, collectionName, synonymID string) (*Synonym, error) {
-	url := fmt.Sprintf("%s/collections/%s/synonyms/%s", c.baseURL, collectionName, synonymID)
+	url := serverPath(c.baseURL, "collections", collectionName, "synonyms", synonymID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -417,7 +428,7 @@ func (c *ServerClient) GetSynonym(ctx context.Context, collectionName, synonymID
 
 // DeleteSynonym deletes a synonym
 func (c *ServerClient) DeleteSynonym(ctx context.Context, collectionName, synonymID string) error {
-	url := fmt.Sprintf("%s/collections/%s/synonyms/%s", c.baseURL, collectionName, synonymID)
+	url := serverPath(c.baseURL, "collections", collectionName, "synonyms", synonymID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -446,7 +457,7 @@ func (c *ServerClient) CreateOverride(ctx context.Context, collectionName string
 		return nil, fmt.Errorf("failed to marshal override: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/collections/%s/overrides/%s", c.baseURL, collectionName, override.ID)
+	url := serverPath(c.baseURL, "collections", collectionName, "overrides", override.ID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -475,7 +486,7 @@ func (c *ServerClient) CreateOverride(ctx context.Context, collectionName string
 
 // GetOverride retrieves an override by ID
 func (c *ServerClient) GetOverride(ctx context.Context, collectionName, overrideID string) (*Override, error) {
-	url := fmt.Sprintf("%s/collections/%s/overrides/%s", c.baseURL, collectionName, overrideID)
+	url := serverPath(c.baseURL, "collections", collectionName, "overrides", overrideID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -508,7 +519,7 @@ func (c *ServerClient) GetOverride(ctx context.Context, collectionName, override
 
 // DeleteOverride deletes an override
 func (c *ServerClient) DeleteOverride(ctx context.Context, collectionName, overrideID string) error {
-	url := fmt.Sprintf("%s/collections/%s/overrides/%s", c.baseURL, collectionName, overrideID)
+	url := serverPath(c.baseURL, "collections", collectionName, "overrides", overrideID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -537,7 +548,7 @@ func (c *ServerClient) CreateStopwordsSet(ctx context.Context, stopwords *Stopwo
 		return nil, fmt.Errorf("failed to marshal stopwords: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/stopwords/%s", c.baseURL, stopwords.ID)
+	url := serverPath(c.baseURL, "stopwords", stopwords.ID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -566,7 +577,7 @@ func (c *ServerClient) CreateStopwordsSet(ctx context.Context, stopwords *Stopwo
 
 // GetStopwordsSet retrieves a stopwords set by ID
 func (c *ServerClient) GetStopwordsSet(ctx context.Context, id string) (*StopwordsSet, error) {
-	url := fmt.Sprintf("%s/stopwords/%s", c.baseURL, id)
+	url := serverPath(c.baseURL, "stopwords", id)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -602,7 +613,7 @@ func (c *ServerClient) GetStopwordsSet(ctx context.Context, id string) (*Stopwor
 
 // DeleteStopwordsSet deletes a stopwords set
 func (c *ServerClient) DeleteStopwordsSet(ctx context.Context, id string) error {
-	url := fmt.Sprintf("%s/stopwords/%s", c.baseURL, id)
+	url := serverPath(c.baseURL, "stopwords", id)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -626,7 +637,7 @@ func (c *ServerClient) DeleteStopwordsSet(ctx context.Context, id string) error 
 
 // UpsertCollectionAlias creates or updates a collection alias
 func (c *ServerClient) UpsertCollectionAlias(ctx context.Context, alias *CollectionAlias) (*CollectionAlias, error) {
-	url := fmt.Sprintf("%s/aliases/%s", c.baseURL, alias.Name)
+	url := serverPath(c.baseURL, "aliases", alias.Name)
 
 	// Only send collection_name in the body
 	body, err := json.Marshal(map[string]string{
@@ -664,7 +675,7 @@ func (c *ServerClient) UpsertCollectionAlias(ctx context.Context, alias *Collect
 
 // GetCollectionAlias retrieves a collection alias by name
 func (c *ServerClient) GetCollectionAlias(ctx context.Context, name string) (*CollectionAlias, error) {
-	url := fmt.Sprintf("%s/aliases/%s", c.baseURL, name)
+	url := serverPath(c.baseURL, "aliases", name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -697,7 +708,7 @@ func (c *ServerClient) GetCollectionAlias(ctx context.Context, name string) (*Co
 
 // DeleteCollectionAlias deletes a collection alias
 func (c *ServerClient) DeleteCollectionAlias(ctx context.Context, name string) error {
-	url := fmt.Sprintf("%s/aliases/%s", c.baseURL, name)
+	url := serverPath(c.baseURL, "aliases", name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -751,7 +762,7 @@ func (c *ServerClient) ListCollectionAliases(ctx context.Context) ([]CollectionA
 
 // UpsertPreset creates or updates a search preset
 func (c *ServerClient) UpsertPreset(ctx context.Context, preset *Preset) (*Preset, error) {
-	url := fmt.Sprintf("%s/presets/%s", c.baseURL, preset.Name)
+	url := serverPath(c.baseURL, "presets", preset.Name)
 
 	// Only send value in the body
 	body, err := json.Marshal(map[string]any{
@@ -789,7 +800,7 @@ func (c *ServerClient) UpsertPreset(ctx context.Context, preset *Preset) (*Prese
 
 // GetPreset retrieves a search preset by name
 func (c *ServerClient) GetPreset(ctx context.Context, name string) (*Preset, error) {
-	url := fmt.Sprintf("%s/presets/%s", c.baseURL, name)
+	url := serverPath(c.baseURL, "presets", name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -822,7 +833,7 @@ func (c *ServerClient) GetPreset(ctx context.Context, name string) (*Preset, err
 
 // DeletePreset deletes a search preset
 func (c *ServerClient) DeletePreset(ctx context.Context, name string) error {
-	url := fmt.Sprintf("%s/presets/%s", c.baseURL, name)
+	url := serverPath(c.baseURL, "presets", name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -876,7 +887,7 @@ func (c *ServerClient) ListPresets(ctx context.Context) ([]Preset, error) {
 
 // UpsertAnalyticsRule creates or updates an analytics rule
 func (c *ServerClient) UpsertAnalyticsRule(ctx context.Context, rule *AnalyticsRule) (*AnalyticsRule, error) {
-	url := fmt.Sprintf("%s/analytics/rules/%s", c.baseURL, rule.Name)
+	url := serverPath(c.baseURL, "analytics", "rules", rule.Name)
 
 	var body []byte
 	var err error
@@ -963,7 +974,7 @@ func (c *ServerClient) convertToLegacyParams(rule *AnalyticsRule) map[string]any
 
 // GetAnalyticsRule retrieves an analytics rule by name
 func (c *ServerClient) GetAnalyticsRule(ctx context.Context, name string) (*AnalyticsRule, error) {
-	url := fmt.Sprintf("%s/analytics/rules/%s", c.baseURL, name)
+	url := serverPath(c.baseURL, "analytics", "rules", name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -996,7 +1007,7 @@ func (c *ServerClient) GetAnalyticsRule(ctx context.Context, name string) (*Anal
 
 // DeleteAnalyticsRule deletes an analytics rule
 func (c *ServerClient) DeleteAnalyticsRule(ctx context.Context, name string) error {
-	url := fmt.Sprintf("%s/analytics/rules/%s", c.baseURL, name)
+	url := serverPath(c.baseURL, "analytics", "rules", name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -1229,7 +1240,7 @@ func (c *ServerClient) ListSynonymSets(ctx context.Context) ([]SynonymSet, error
 
 // GetSynonymSet retrieves a synonym set by name (Typesense v30.0+)
 func (c *ServerClient) GetSynonymSet(ctx context.Context, name string) (*SynonymSet, error) {
-	url := fmt.Sprintf("%s/synonym_sets/%s", c.baseURL, name)
+	url := serverPath(c.baseURL, "synonym_sets", name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -1267,7 +1278,7 @@ func (c *ServerClient) UpsertSynonymSet(ctx context.Context, synonymSet *Synonym
 		return nil, fmt.Errorf("failed to marshal synonym set: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/synonym_sets/%s", c.baseURL, synonymSet.Name)
+	url := serverPath(c.baseURL, "synonym_sets", synonymSet.Name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -1296,7 +1307,7 @@ func (c *ServerClient) UpsertSynonymSet(ctx context.Context, synonymSet *Synonym
 
 // DeleteSynonymSet deletes a synonym set by name (Typesense v30.0+)
 func (c *ServerClient) DeleteSynonymSet(ctx context.Context, name string) error {
-	url := fmt.Sprintf("%s/synonym_sets/%s", c.baseURL, name)
+	url := serverPath(c.baseURL, "synonym_sets", name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -1345,7 +1356,7 @@ func (c *ServerClient) UpsertSynonymSetItem(ctx context.Context, setName string,
 		return nil, fmt.Errorf("failed to marshal synonym item: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/synonym_sets/%s/items/%s", c.baseURL, setName, item.ID)
+	url := serverPath(c.baseURL, "synonym_sets", setName, "items", item.ID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -1378,7 +1389,7 @@ func (c *ServerClient) UpsertSynonymSetItem(ctx context.Context, setName string,
 
 // GetSynonymSetItem retrieves a single synonym item from a set (Typesense v30.0+)
 func (c *ServerClient) GetSynonymSetItem(ctx context.Context, setName, itemID string) (*SynonymItem, error) {
-	url := fmt.Sprintf("%s/synonym_sets/%s/items/%s", c.baseURL, setName, itemID)
+	url := serverPath(c.baseURL, "synonym_sets", setName, "items", itemID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -1411,7 +1422,7 @@ func (c *ServerClient) GetSynonymSetItem(ctx context.Context, setName, itemID st
 
 // DeleteSynonymSetItem deletes a single synonym item from a set (Typesense v30.0+)
 func (c *ServerClient) DeleteSynonymSetItem(ctx context.Context, setName, itemID string) error {
-	url := fmt.Sprintf("%s/synonym_sets/%s/items/%s", c.baseURL, setName, itemID)
+	url := serverPath(c.baseURL, "synonym_sets", setName, "items", itemID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -1468,7 +1479,7 @@ func (c *ServerClient) ListCurationSets(ctx context.Context) ([]CurationSet, err
 
 // GetCurationSet retrieves a curation set by name (Typesense v30.0+)
 func (c *ServerClient) GetCurationSet(ctx context.Context, name string) (*CurationSet, error) {
-	url := fmt.Sprintf("%s/curation_sets/%s", c.baseURL, name)
+	url := serverPath(c.baseURL, "curation_sets", name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -1506,7 +1517,7 @@ func (c *ServerClient) UpsertCurationSet(ctx context.Context, curationSet *Curat
 		return nil, fmt.Errorf("failed to marshal curation set: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/curation_sets/%s", c.baseURL, curationSet.Name)
+	url := serverPath(c.baseURL, "curation_sets", curationSet.Name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -1535,7 +1546,7 @@ func (c *ServerClient) UpsertCurationSet(ctx context.Context, curationSet *Curat
 
 // DeleteCurationSet deletes a curation set by name (Typesense v30.0+)
 func (c *ServerClient) DeleteCurationSet(ctx context.Context, name string) error {
-	url := fmt.Sprintf("%s/curation_sets/%s", c.baseURL, name)
+	url := serverPath(c.baseURL, "curation_sets", name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -1552,6 +1563,119 @@ func (c *ServerClient) DeleteCurationSet(ctx context.Context, name string) error
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to delete curation set: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// EnsureCurationSetExists creates a curation set if it doesn't already exist (Typesense v30.0+).
+func (c *ServerClient) EnsureCurationSetExists(ctx context.Context, name string) error {
+	existing, err := c.GetCurationSet(ctx, name)
+	if err != nil {
+		return fmt.Errorf("failed to check curation set: %w", err)
+	}
+
+	if existing == nil {
+		emptySet := &CurationSet{Name: name, Curations: []CurationItem{}}
+		_, err = c.UpsertCurationSet(ctx, emptySet)
+		if err != nil {
+			return fmt.Errorf("failed to create curation set: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// UpsertCurationSetItem creates or updates a single curation item within a set (Typesense v30.0+).
+func (c *ServerClient) UpsertCurationSetItem(ctx context.Context, setName string, item *CurationItem) (*CurationItem, error) {
+	body, err := json.Marshal(item)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal curation item: %w", err)
+	}
+
+	url := serverPath(c.baseURL, "curation_sets", setName, "items", item.ID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upsert curation item: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("curation set not found")
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to upsert curation item: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result CurationItem
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// GetCurationSetItem retrieves a single curation item from a set (Typesense v30.0+).
+func (c *ServerClient) GetCurationSetItem(ctx context.Context, setName, itemID string) (*CurationItem, error) {
+	url := serverPath(c.baseURL, "curation_sets", setName, "items", itemID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get curation item: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get curation item: status %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result CurationItem
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// DeleteCurationSetItem deletes a single curation item from a set (Typesense v30.0+).
+func (c *ServerClient) DeleteCurationSetItem(ctx context.Context, setName, itemID string) error {
+	url := serverPath(c.baseURL, "curation_sets", setName, "items", itemID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete curation item: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete curation item: status %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	return nil
@@ -1589,7 +1713,7 @@ func (c *ServerClient) ListCollections(ctx context.Context) ([]Collection, error
 // For Typesense v30+, this endpoint doesn't exist - use ListSynonymSets instead.
 // Returns an empty list if the endpoint doesn't exist (404).
 func (c *ServerClient) ListSynonyms(ctx context.Context, collectionName string) ([]Synonym, error) {
-	url := fmt.Sprintf("%s/collections/%s/synonyms", c.baseURL, collectionName)
+	url := serverPath(c.baseURL, "collections", collectionName, "synonyms")
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -1629,7 +1753,7 @@ func (c *ServerClient) ListSynonyms(ctx context.Context, collectionName string) 
 // For Typesense v30+, this endpoint doesn't exist - use ListCurationSets instead.
 // Returns an empty list if the endpoint doesn't exist (404).
 func (c *ServerClient) ListOverrides(ctx context.Context, collectionName string) ([]Override, error) {
-	url := fmt.Sprintf("%s/collections/%s/overrides", c.baseURL, collectionName)
+	url := serverPath(c.baseURL, "collections", collectionName, "overrides")
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -1712,8 +1836,8 @@ func (c *ServerClient) UpsertStemmingDictionary(ctx context.Context, id string, 
 		}
 	}
 
-	url := fmt.Sprintf("%s/stemming/dictionaries/import?id=%s", c.baseURL, id)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &buf)
+	endpoint := serverPath(c.baseURL, "stemming", "dictionaries", "import") + "?id=" + url.QueryEscape(id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &buf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -1741,7 +1865,7 @@ func (c *ServerClient) UpsertStemmingDictionary(ctx context.Context, id string, 
 
 // GetStemmingDictionary retrieves a stemming dictionary by ID
 func (c *ServerClient) GetStemmingDictionary(ctx context.Context, id string) (*StemmingDictionary, error) {
-	url := fmt.Sprintf("%s/stemming/dictionaries/%s", c.baseURL, id)
+	url := serverPath(c.baseURL, "stemming", "dictionaries", id)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -1776,7 +1900,7 @@ func (c *ServerClient) GetStemmingDictionary(ctx context.Context, id string) (*S
 // Note: If Typesense does not support DELETE for stemming dictionaries,
 // this will log a warning and succeed (resource removed from state only).
 func (c *ServerClient) DeleteStemmingDictionary(ctx context.Context, id string) error {
-	url := fmt.Sprintf("%s/stemming/dictionaries/%s", c.baseURL, id)
+	url := serverPath(c.baseURL, "stemming", "dictionaries", id)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -1820,9 +1944,42 @@ func (c *ServerClient) ListStemmingDictionaries(ctx context.Context) ([]Stemming
 		return nil, fmt.Errorf("failed to list stemming dictionaries: status %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
 	var result []StemmingDictionary
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(bodyBytes, &result); err == nil {
+		return result, nil
+	}
+
+	var wrapper struct {
+		Dictionaries []json.RawMessage `json:"dictionaries"`
+	}
+	if err := json.Unmarshal(bodyBytes, &wrapper); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	result = make([]StemmingDictionary, 0, len(wrapper.Dictionaries))
+	for _, rawDictionary := range wrapper.Dictionaries {
+		var id string
+		if err := json.Unmarshal(rawDictionary, &id); err == nil {
+			dictionary, err := c.GetStemmingDictionary(ctx, id)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get stemming dictionary %q: %w", id, err)
+			}
+			if dictionary != nil {
+				result = append(result, *dictionary)
+			}
+			continue
+		}
+
+		var dictionary StemmingDictionary
+		if err := json.Unmarshal(rawDictionary, &dictionary); err != nil {
+			return nil, fmt.Errorf("failed to decode stemming dictionary: %w", err)
+		}
+		result = append(result, dictionary)
 	}
 
 	return result, nil
@@ -1890,7 +2047,7 @@ func (c *ServerClient) CreateNLSearchModel(ctx context.Context, model *NLSearchM
 
 // GetNLSearchModel retrieves a Natural Language Search Model by ID
 func (c *ServerClient) GetNLSearchModel(ctx context.Context, id string) (*NLSearchModel, error) {
-	url := fmt.Sprintf("%s/nl_search_models/%s", c.baseURL, id)
+	url := serverPath(c.baseURL, "nl_search_models", id)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -1928,7 +2085,7 @@ func (c *ServerClient) UpdateNLSearchModel(ctx context.Context, model *NLSearchM
 		return nil, fmt.Errorf("failed to marshal NL search model: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/nl_search_models/%s", c.baseURL, model.ID)
+	url := serverPath(c.baseURL, "nl_search_models", model.ID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -1957,7 +2114,7 @@ func (c *ServerClient) UpdateNLSearchModel(ctx context.Context, model *NLSearchM
 
 // DeleteNLSearchModel deletes a Natural Language Search Model
 func (c *ServerClient) DeleteNLSearchModel(ctx context.Context, id string) error {
-	url := fmt.Sprintf("%s/nl_search_models/%s", c.baseURL, id)
+	url := serverPath(c.baseURL, "nl_search_models", id)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -2032,7 +2189,7 @@ func (c *ServerClient) CreateConversationModel(ctx context.Context, model *Conve
 
 // GetConversationModel retrieves a Conversation Model by ID
 func (c *ServerClient) GetConversationModel(ctx context.Context, id string) (*ConversationModel, error) {
-	url := fmt.Sprintf("%s/conversations/models/%s", c.baseURL, id)
+	url := serverPath(c.baseURL, "conversations", "models", id)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -2070,7 +2227,7 @@ func (c *ServerClient) UpdateConversationModel(ctx context.Context, model *Conve
 		return nil, fmt.Errorf("failed to marshal conversation model: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/conversations/models/%s", c.baseURL, model.ID)
+	url := serverPath(c.baseURL, "conversations", "models", model.ID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -2099,7 +2256,7 @@ func (c *ServerClient) UpdateConversationModel(ctx context.Context, model *Conve
 
 // DeleteConversationModel deletes a Conversation Model
 func (c *ServerClient) DeleteConversationModel(ctx context.Context, id string) error {
-	url := fmt.Sprintf("%s/conversations/models/%s", c.baseURL, id)
+	url := serverPath(c.baseURL, "conversations", "models", id)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)

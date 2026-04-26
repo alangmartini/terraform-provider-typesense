@@ -301,9 +301,9 @@ func TestCollectionJSONSerialization(t *testing.T) {
 
 func TestSynonymJSONSerialization(t *testing.T) {
 	tests := []struct {
-		name           string
-		synonym        Synonym
-		expectedFields []string
+		name             string
+		synonym          Synonym
+		expectedFields   []string
 		unexpectedFields []string
 	}{
 		{
@@ -581,6 +581,35 @@ func TestCurationItemJSONSerialization(t *testing.T) {
 // These tests use a mock HTTP server to validate that actual API requests
 // contain the correct JSON payloads.
 
+func TestServerClientEscapesPathSegmentIDs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		wantPath := "/analytics/rules/docs%20%2F%20popular%20queries"
+		if got := r.URL.EscapedPath(); got != wantPath {
+			t.Fatalf("request path = %q, want %q", got, wantPath)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name":       "docs / popular queries",
+			"type":       "popular_queries",
+			"collection": "docs",
+			"event_type": "search",
+			"params":     map[string]any{},
+		})
+	}))
+	defer server.Close()
+
+	client := &ServerClient{
+		httpClient: http.DefaultClient,
+		apiKey:     "test-api-key",
+		baseURL:    server.URL,
+	}
+
+	if _, err := client.GetAnalyticsRule(context.Background(), "docs / popular queries"); err != nil {
+		t.Fatalf("GetAnalyticsRule failed: %v", err)
+	}
+}
+
 func TestUpsertSynonymSetHTTPPayload(t *testing.T) {
 	var receivedPayload map[string]interface{}
 
@@ -701,6 +730,154 @@ func TestUpsertCurationSetHTTPPayload(t *testing.T) {
 	}
 	if _, ok := receivedPayload["name"]; !ok {
 		t.Error("Request payload missing 'name' field")
+	}
+}
+
+func TestEnsureCurationSetExistsSendsEmptyItems(t *testing.T) {
+	var receivedPayload map[string]any
+	requestCount := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		switch requestCount {
+		case 1:
+			if r.Method != http.MethodGet || r.URL.Path != "/curation_sets/tracks" {
+				t.Fatalf("First request = %s %s, want GET /curation_sets/tracks", r.Method, r.URL.Path)
+			}
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]any{"message": "Not Found"})
+		case 2:
+			if r.Method != http.MethodPut || r.URL.Path != "/curation_sets/tracks" {
+				t.Fatalf("Second request = %s %s, want PUT /curation_sets/tracks", r.Method, r.URL.Path)
+			}
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("Failed to read request body: %v", err)
+			}
+			if err := json.Unmarshal(body, &receivedPayload); err != nil {
+				t.Fatalf("Failed to parse request JSON: %v", err)
+			}
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(receivedPayload)
+		default:
+			t.Fatalf("Unexpected request %d: %s %s", requestCount, r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := &ServerClient{
+		httpClient: http.DefaultClient,
+		apiKey:     "test-api-key",
+		baseURL:    server.URL,
+	}
+
+	if err := client.EnsureCurationSetExists(context.Background(), "tracks"); err != nil {
+		t.Fatalf("EnsureCurationSetExists failed: %v", err)
+	}
+
+	items, ok := receivedPayload["items"].([]any)
+	if !ok {
+		t.Fatalf("Request payload items = %T, want empty array", receivedPayload["items"])
+	}
+	if len(items) != 0 {
+		t.Fatalf("Request payload items length = %d, want 0", len(items))
+	}
+}
+
+func TestUpsertCurationSetItemUsesItemEndpoint(t *testing.T) {
+	var receivedPayload map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("Expected PUT method, got %s", r.Method)
+		}
+		wantPath := "/curation_sets/tracks%20%2F%20prod/items/best%20%2F%20of"
+		if got := r.URL.EscapedPath(); got != wantPath {
+			t.Errorf("Expected path %s, got %s", wantPath, got)
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("Failed to read request body: %v", err)
+		}
+		if err := json.Unmarshal(body, &receivedPayload); err != nil {
+			t.Fatalf("Failed to parse request JSON: %v", err)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(receivedPayload)
+	}))
+	defer server.Close()
+
+	client := &ServerClient{
+		httpClient: http.DefaultClient,
+		apiKey:     "test-api-key",
+		baseURL:    server.URL,
+	}
+
+	_, err := client.UpsertCurationSetItem(context.Background(), "tracks / prod", &CurationItem{
+		ID: "best / of",
+		Rule: OverrideRule{
+			Query: "best of",
+			Match: "contains",
+		},
+		Includes: []OverrideInclude{{ID: "1", Position: 1}},
+	})
+	if err != nil {
+		t.Fatalf("UpsertCurationSetItem failed: %v", err)
+	}
+
+	if _, ok := receivedPayload["items"]; ok {
+		t.Error("Request payload should be a single curation item, not a whole set with items")
+	}
+	if receivedPayload["id"] != "best / of" {
+		t.Errorf("Request payload id = %v, want %q", receivedPayload["id"], "best / of")
+	}
+	if _, ok := receivedPayload["rule"]; !ok {
+		t.Error("Request payload missing rule field")
+	}
+}
+
+func TestListStemmingDictionariesFetchesDictionaryIDs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/stemming/dictionaries":
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"dictionaries": []string{"music-terms"},
+			})
+		case r.Method == http.MethodGet && r.URL.Path == "/stemming/dictionaries/music-terms":
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": "music-terms",
+				"words": []map[string]string{
+					{"word": "guitars", "root": "guitar"},
+				},
+			})
+		default:
+			t.Fatalf("Unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := &ServerClient{
+		httpClient: http.DefaultClient,
+		apiKey:     "test-api-key",
+		baseURL:    server.URL,
+	}
+
+	dictionaries, err := client.ListStemmingDictionaries(context.Background())
+	if err != nil {
+		t.Fatalf("ListStemmingDictionaries failed: %v", err)
+	}
+	if len(dictionaries) != 1 {
+		t.Fatalf("len(dictionaries) = %d, want 1", len(dictionaries))
+	}
+	if dictionaries[0].ID != "music-terms" {
+		t.Errorf("dictionary ID = %q, want %q", dictionaries[0].ID, "music-terms")
+	}
+	if len(dictionaries[0].Words) != 1 || dictionaries[0].Words[0].Stem != "guitar" {
+		t.Fatalf("dictionary words = %#v, want guitars -> guitar", dictionaries[0].Words)
 	}
 }
 
@@ -1294,9 +1471,9 @@ func TestOverrideRoundTrip(t *testing.T) {
 		Includes: []OverrideInclude{
 			{ID: "doc-1", Position: 1},
 		},
-		FilterBy:          "active:true",
-		StopProcessing:    true,
-		Metadata:          map[string]any{"source": "test"},
+		FilterBy:       "active:true",
+		StopProcessing: true,
+		Metadata:       map[string]any{"source": "test"},
 	}
 
 	data, err := json.Marshal(original)

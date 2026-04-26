@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -68,12 +69,8 @@ func (g *Generator) exportSchema(ctx context.Context, collectionName string, dat
 
 // exportDocumentsToFile streams documents from a collection to a JSONL file
 func (g *Generator) exportDocumentsToFile(ctx context.Context, collectionName string, dataDir string) error {
-	// Build export URL
-	url := fmt.Sprintf("%s://%s:%d/collections/%s/documents/export",
-		g.config.Protocol, g.config.Host, g.config.Port, collectionName)
-
 	// Create request
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, documentExportURL(g.config.Protocol, g.config.Host, g.config.Port, collectionName), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -108,6 +105,11 @@ func (g *Generator) exportDocumentsToFile(ctx context.Context, collectionName st
 
 	fmt.Printf("  Exported %s: %d bytes\n", collectionName, written)
 	return nil
+}
+
+func documentExportURL(protocol, host string, port int, collectionName string) string {
+	return fmt.Sprintf("%s://%s:%d/collections/%s/documents/export",
+		protocol, host, port, url.PathEscape(collectionName))
 }
 
 // exportSynonyms exports all synonyms for a collection to a JSON file

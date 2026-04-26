@@ -83,6 +83,14 @@ func TestClusterMatchesHost(t *testing.T) {
 	}
 }
 
+func TestDocumentExportURLEscapesCollectionName(t *testing.T) {
+	got := documentExportURL("http", "127.0.0.1", 8108, "docs / prod")
+	want := "http://127.0.0.1:8108/collections/docs%20%2F%20prod/documents/export"
+	if got != want {
+		t.Fatalf("documentExportURL() = %q, want %q", got, want)
+	}
+}
+
 func TestClusterMatchesHostNormalizesHostnames(t *testing.T) {
 	cluster := client.Cluster{
 		Hostnames: client.ClusterHostnames{
