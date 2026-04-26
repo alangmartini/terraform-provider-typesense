@@ -302,8 +302,9 @@ func TestDefaultFeatureChecker(t *testing.T) {
 		{"v29 supports NL search models", "29.0", FeatureNLSearchModels, true},
 		{"v30 supports NL search models", "30.0", FeatureNLSearchModels, true},
 
-		// Stemming dictionaries (v29+)
-		{"v28 does not support stemming dictionaries", "28.0", FeatureStemmingDictionaries, false},
+		// Stemming dictionaries (v28+)
+		{"v27 does not support stemming dictionaries", "27.0", FeatureStemmingDictionaries, false},
+		{"v28 supports stemming dictionaries", "28.0", FeatureStemmingDictionaries, true},
 		{"v29 supports stemming dictionaries", "29.0", FeatureStemmingDictionaries, true},
 		{"v30 supports stemming dictionaries", "30.0", FeatureStemmingDictionaries, true},
 	}
@@ -468,7 +469,7 @@ func TestCheckVersionRequirement(t *testing.T) {
 			{FeatureStopwords, tfnames.FullTypeName(tfnames.ResourceStopwordsSet), "26.0", "v27.0+"},
 			{FeatureAnalyticsRules, tfnames.FullTypeName(tfnames.ResourceAnalyticsRule), "27.0", "v28.0+"},
 			{FeatureNLSearchModels, tfnames.FullTypeName(tfnames.ResourceNLSearchModel), "28.0", "v29.0+"},
-			{FeatureStemmingDictionaries, tfnames.FullTypeName(tfnames.ResourceStemmingDictionary), "28.0", "v29.0+"},
+			{FeatureStemmingDictionaries, tfnames.FullTypeName(tfnames.ResourceStemmingDictionary), "27.0", "v28.0+"},
 		}
 
 		for _, tt := range featureTests {
@@ -500,7 +501,7 @@ func TestFeatureMinVersionString(t *testing.T) {
 		{FeatureStopwords, "v27.0+"},
 		{FeatureAnalyticsRules, "v28.0+"},
 		{FeatureNLSearchModels, "v29.0+"},
-		{FeatureStemmingDictionaries, "v29.0+"},
+		{FeatureStemmingDictionaries, "v28.0+"},
 		{FeatureSynonymSets, "v30.0+"},
 		{FeatureCurationSets, "v30.0+"},
 		{FeaturePerCollectionSynonyms, "unknown version"}, // nil min version
