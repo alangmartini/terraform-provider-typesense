@@ -18,20 +18,34 @@ PORT := 8108
 CONTAINER_NAME := typesense-test
 TYPESENSE_HOST := localhost
 TYPESENSE_PROTOCOL := http
+PROVIDER_BINARY := terraform-provider-typesense
+ifeq ($(OS),Windows_NT)
+  PROVIDER_BINARY := terraform-provider-typesense.exe
+endif
 
 # Docker command: use WSL docker on Windows, native docker elsewhere
 UNAME_S := $(shell uname -s 2>/dev/null || echo Windows)
 ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
   export MSYS_NO_PATHCONV := 1
-  DOCKER := wsl docker
-  DOCKER_COMPOSE := wsl docker compose
+  ifneq ($(shell docker version >/dev/null 2>&1 && echo yes),)
+    DOCKER := docker
+    DOCKER_COMPOSE := docker compose
+  else
+    DOCKER := wsl docker
+    DOCKER_COMPOSE := wsl docker compose
+  endif
   # Convert Git Bash path (/c/Users/...) to WSL path (/mnt/c/Users/...)
   WSL_PWD := $(shell echo '$(PWD)' | sed 's|^/\([a-z]\)/|/mnt/\1/|')
   # On Windows/WSL, run 'make wsl-keepalive' in a separate terminal first
 else ifeq ($(findstring MSYS,$(UNAME_S)),MSYS)
   export MSYS_NO_PATHCONV := 1
-  DOCKER := wsl docker
-  DOCKER_COMPOSE := wsl docker compose
+  ifneq ($(shell docker version >/dev/null 2>&1 && echo yes),)
+    DOCKER := docker
+    DOCKER_COMPOSE := docker compose
+  else
+    DOCKER := wsl docker
+    DOCKER_COMPOSE := wsl docker compose
+  endif
   WSL_PWD := $(shell echo '$(PWD)' | sed 's|^/\([a-z]\)/|/mnt/\1/|')
   # On Windows/WSL, run 'make wsl-keepalive' in a separate terminal first
 else
@@ -41,7 +55,9 @@ else
 endif
 
 # Chinook example configuration
-CHINOOK_DIR := $(PWD)/examples/chinook
+CHINOOK_DIR := $(CURDIR)/examples/chinook
+CHINOOK_STATE_DIR := $(CURDIR)/tmp/chinook-state
+CHINOOK_STATE := $(CHINOOK_STATE_DIR)/terraform.tfstate
 
 # Load .env file if it exists (for TEST_OPENAI_API_KEY)
 -include .env
@@ -50,6 +66,7 @@ export
 # Build the provider binary
 build:
 	@echo "Building provider binary..."
+	@go build -o "$(PROVIDER_BINARY)" .
 
 # Run unit tests only (no acceptance tests)
 test:
@@ -235,6 +252,7 @@ chinook-apply:
 	else \
 		echo "No OpenAI API key - skipping NL Search and Conversation Model resources"; \
 	fi
+	@mkdir -p "$(CHINOOK_STATE_DIR)"
 	@cd $(CHINOOK_DIR) && \
 		if grep -q "alanm/typesense" ~/.terraformrc 2>/dev/null; then \
 			echo "Dev override detected - skipping terraform init"; \
@@ -242,6 +260,7 @@ chinook-apply:
 			terraform init; \
 		fi && \
 		terraform apply -auto-approve \
+			-state="$(CHINOOK_STATE)" \
 			-var="typesense_api_key=$(TYPESENSE_API_KEY)" \
 			-var="typesense_host=$(TYPESENSE_HOST)" \
 			-var="typesense_port=$(PORT)" \
@@ -255,6 +274,7 @@ chinook-destroy:
 	@echo "Destroying chinook example resources..."
 	@cd $(CHINOOK_DIR) && \
 		terraform destroy -auto-approve \
+			-state="$(CHINOOK_STATE)" \
 			-var="typesense_api_key=$(TYPESENSE_API_KEY)" \
 			-var="typesense_host=$(TYPESENSE_HOST)" \
 			-var="typesense_port=$(PORT)" \
@@ -265,13 +285,18 @@ chinook-destroy:
 # Full chinook test cycle
 chinook-test:
 	@echo "Running full chinook example test..."
+	@rm -rf "$(CHINOOK_STATE_DIR)"
+	@"$(MAKE)" build
 	@"$(MAKE)" start-typesense
 	@"$(MAKE)" chinook-apply || ("$(MAKE)" stop-typesense && exit 1)
 	@echo ""
-	@echo "Verifying resources were created..."
-	@curl -sf "http://localhost:$(PORT)/collections" \
-		-H "X-TYPESENSE-API-KEY: $(TYPESENSE_API_KEY)" | \
-		jq -r '.[] | .name' | sort
+	@echo "Verifying resources, document fixtures, and generate output..."
+	@TYPESENSE_HOST=$(TYPESENSE_HOST) \
+	TYPESENSE_PORT=$(PORT) \
+	TYPESENSE_PROTOCOL=$(TYPESENSE_PROTOCOL) \
+	TYPESENSE_API_KEY=$(TYPESENSE_API_KEY) \
+	TEST_OPENAI_API_KEY="$(TEST_OPENAI_API_KEY)" \
+	"$(SHELL)" "$(CURDIR)/scripts/verify-chinook-generate.sh" || ("$(MAKE)" chinook-destroy; "$(MAKE)" stop-typesense; exit 1)
 	@echo ""
 	@"$(MAKE)" chinook-destroy
 	@"$(MAKE)" stop-typesense
