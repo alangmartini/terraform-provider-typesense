@@ -17,7 +17,7 @@ Flat checklist tracking implementation progress. Source of truth is `tasks/plan.
 ## Phase 2: Tier 1 vertical slices (v30)
 - [x] 2.1 `apply_test.go` — TestApply (~20s wall-clock; stable across 2 runs)
 - [x] 2.2 `update_test.go` — TestUpdate (~26s; appends sentinel stopword, asserts via GetStopwordsSet)
-- [ ] 2.3 `drift_test.go` — TestDrift
+- [x] 2.3 `drift_test.go` — TestDrift (~25s; deletes resource server-side, plan exit=2, apply restores)
 - [ ] 2.4 `import_roundtrip_test.go` — TestImportRoundtrip
 - [ ] 2.5 `generate_idempotent_test.go` — TestGenerateIdempotent
 - [ ] Checkpoint 2: Tier 1 stable across 3 runs
