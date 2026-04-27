@@ -18,8 +18,8 @@ Flat checklist tracking implementation progress. Source of truth is `tasks/plan.
 - [x] 2.1 `apply_test.go` — TestApply (~20s wall-clock; stable across 2 runs)
 - [x] 2.2 `update_test.go` — TestUpdate (~26s; appends sentinel stopword, asserts via GetStopwordsSet)
 - [x] 2.3 `drift_test.go` — TestDrift (~25s; deletes resource server-side, plan exit=2, apply restores)
-- [ ] 2.4 `import_roundtrip_test.go` — TestImportRoundtrip
-- [ ] 2.5 `generate_idempotent_test.go` — TestGenerateIdempotent
+- [x] 2.4 `import_roundtrip_test.go` — TestImportRoundtrip (~16s; required generator fix to emit `remove_matched_tokens=false` when `replace_query` is set, plus override Read fix to use null instead of empty strings for query/match)
+- [x] 2.5 `generate_idempotent_test.go` — TestGenerateIdempotent (~12-16s; normalizes only the `# Generated at` timestamp, asserts byte-identical otherwise)
 - [ ] Checkpoint 2: Tier 1 stable across 3 runs
 
 ## Phase 3: Tier 2 — per-version smoke
