@@ -39,10 +39,10 @@ Flat checklist tracking implementation progress. Source of truth is `tasks/plan.
 - [ ] 5.3 `migrate_v29_to_v30_test.go` — TestMigrateV29ToV30 (only if migrator already supports translation)
 
 ## Phase 6: Wire-up and cleanup
-- [ ] 6.1 `make chinook-test` runs `go test -tags e2e`
-- [ ] 6.2 Remove `scripts/verify-chinook-generate.sh`
-- [ ] 6.3 Update `README.md` + add `docs/testing/chinook-e2e.md`
-- [ ] Checkpoint 6: single-command E2E, .sh gone, docs current
+- [x] 6.1 `make chinook-test` runs `go test -tags e2e` (delegates to `make chinook-e2e RUN=.`)
+- [x] 6.2 Remove `scripts/verify-chinook-generate.sh`
+- [x] 6.3 Update `README.md` + add `docs/testing/chinook-e2e.md`
+- [x] Checkpoint 6: single-command E2E, .sh gone, docs current
 
 ## Decisions still pending (block start)
 - [ ] Tier 3 in-scope or deferred?
