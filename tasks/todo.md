@@ -20,14 +20,14 @@ Flat checklist tracking implementation progress. Source of truth is `tasks/plan.
 - [x] 2.3 `drift_test.go` — TestDrift (~25s; deletes resource server-side, plan exit=2, apply restores)
 - [x] 2.4 `import_roundtrip_test.go` — TestImportRoundtrip (~16s; required generator fix to emit `remove_matched_tokens=false` when `replace_query` is set, plus override Read fix to use null instead of empty strings for query/match)
 - [x] 2.5 `generate_idempotent_test.go` — TestGenerateIdempotent (~12-16s; normalizes only the `# Generated at` timestamp, asserts byte-identical otherwise)
-- [ ] Checkpoint 2: Tier 1 stable across 3 runs
+- [x] Checkpoint 2: Tier 1 stable across 3 runs (full suite ~92s wall-clock end-to-end)
 
 ## Phase 3: Tier 2 — per-version smoke
-- [ ] 3.1 `version_v27_test.go` — TestVersionV27
-- [ ] 3.2 `version_v28_test.go` — TestVersionV28
-- [ ] 3.3 `version_v29_test.go` — TestVersionV29
-- [ ] 3.4 `version_v30_test.go` — TestVersionV30
-- [ ] Checkpoint 3: total wall-clock <5 min on dev machine
+- [x] 3.1 `version_v27_test.go` — TestVersionV27 (~10-12s; analytics.tf dropped, 7 collections expected; analytics_reader API key moved into analytics.tf for self-consistency)
+- [x] 3.2 `version_v28_test.go` — TestVersionV28 (~11-13s)
+- [x] 3.3 `version_v29_test.go` — TestVersionV29 (~11-19s; required ListAnalyticsRules to also accept the v28-v29 `{"rules":[...]}` wrapped shape)
+- [x] 3.4 `version_v30_test.go` — TestVersionV30 (~12-22s)
+- [x] Checkpoint 3: total wall-clock <5 min on dev machine (Tier 1+2 = 9 tests, ~114s on dev)
 
 ## Phase 4: Migration
 - [ ] 4.1 `migrate_v30_test.go` — TestMigrateV30
