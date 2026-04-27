@@ -11,8 +11,8 @@ Flat checklist tracking implementation progress. Source of truth is `tasks/plan.
 - [x] 1.1 Container helper (`harness_test.go`) + `harness_smoke_test.go`
 - [x] 1.2 Terraform runner helper — split into `provider_build_test.go` (TestMain + binary build) and `terraform_runner_test.go` (Apply/Destroy/Plan)
 - [x] 1.3 Mock OpenAI server (`mock_openai_test.go`) + smoke test
-- [ ] 1.4 Chinook fixture materializer (`chinook_fixture_test.go`)
-- [ ] Checkpoint 1: helpers green, plan reviewed
+- [x] 1.4 Chinook fixture materializer (`chinook_fixture_test.go`) — drops conversation_model.tf unconditionally for now (mock not yet supported); chinook gains `mock_openai_url` var to redirect nl_search_model validation
+- [x] Checkpoint 1: helpers green
 
 ## Phase 2: Tier 1 vertical slices (v30)
 - [ ] 2.1 `apply_test.go` — TestApply
