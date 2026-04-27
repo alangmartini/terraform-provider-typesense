@@ -33,10 +33,10 @@ Flat checklist tracking implementation progress. Source of truth is `tasks/plan.
 - [x] 4.1 `migrate_v30_test.go` — TestMigrateV30 (~30-37s isolated; seeds 3 tracks docs, runs generate --include-data + migrate --include-documents, asserts collection set, doc counts, and tracks schema fingerprint match across two v30 clusters)
 - [x] Checkpoint 4: migration timing baseline captured (~30s isolated, ~37s in full suite)
 
-## Phase 5: Edge cases (optional)
-- [ ] 5.1 `concurrent_apply_test.go` — TestConcurrentApply
-- [ ] 5.2 `escape_chars_test.go` — TestEscapeChars
-- [ ] 5.3 `migrate_v29_to_v30_test.go` — TestMigrateV29ToV30 (only if migrator already supports translation)
+## Phase 5: Edge cases (optional, Tier 3)
+- [~] 5.1 `concurrent_apply_test.go` — TestConcurrentApply (skipped: chinook's 16 synonyms in tracks already exercise the v30 set-create + parallel-item-upsert mutex; an explicit test would duplicate TestApply)
+- [x] 5.2 `escape_chars_test.go` — TestEscapeChars (~11s; surfaced and fixed a v30 curation upsert bug where omitempty on RemoveMatchedTokens=false silently fell through to the server default of true; CurationItem.RemoveMatchedTokens now uses *bool)
+- [~] 5.3 `migrate_v29_to_v30_test.go` — TestMigrateV29ToV30 (skipped: migrator's importSynonyms/importOverrides call per-collection endpoints removed in v30; needs migrator feature work to translate to synonym_sets/curation_sets first)
 
 ## Phase 6: Wire-up and cleanup
 - [x] 6.1 `make chinook-test` runs `go test -tags e2e` (delegates to `make chinook-e2e RUN=.`)
