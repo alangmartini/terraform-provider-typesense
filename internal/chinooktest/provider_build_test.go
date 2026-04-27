@@ -36,27 +36,28 @@ func runTestMain(m *testing.M) int {
 }
 
 func buildProviderBinary() (string, func(), error) {
-	dir, err := os.MkdirTemp("", "chinooke2e-provider-")
+	root, err := repoRoot()
 	if err != nil {
-		return "", nil, fmt.Errorf("mkdir provider tempdir: %w", err)
+		return "", nil, fmt.Errorf("locate repo root: %w", err)
 	}
-	cleanup := func() { _ = os.RemoveAll(dir) }
+
+	// Build to a stable path under <repo>/bin so Windows Firewall remembers
+	// the per-binary network access rule across test runs (avoiding repeated
+	// "Allow this app" popups). The directory is gitignored via *.exe.
+	dir := filepath.Join(root, "bin", "chinooktest")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", nil, fmt.Errorf("mkdir provider bindir: %w", err)
+	}
+	cleanup := func() {}
 
 	bin := filepath.Join(dir, "terraform-provider-typesense")
 	if runtime.GOOS == "windows" {
 		bin += ".exe"
 	}
 
-	root, err := repoRoot()
-	if err != nil {
-		cleanup()
-		return "", nil, fmt.Errorf("locate repo root: %w", err)
-	}
-
 	cmd := exec.Command("go", "build", "-o", bin, ".")
 	cmd.Dir = root
 	if out, err := cmd.CombinedOutput(); err != nil {
-		cleanup()
 		return "", nil, fmt.Errorf("go build provider: %w\n%s", err, out)
 	}
 	return dir, cleanup, nil

@@ -10,7 +10,7 @@ endif
 .PHONY: test test-acc test-acc-ci test-consistency test-conversation-model \
 	start-typesense stop-typesense build clean wsl-keepalive \
 	testbed-up testbed-down testbed-seed testbed-e2e testbed-verify testbed-clean \
-	chinook-apply chinook-destroy chinook-test
+	chinook-apply chinook-destroy chinook-test chinook-e2e
 
 # Configuration
 TYPESENSE_API_KEY ?= test-api-key-for-acceptance-tests
@@ -281,6 +281,27 @@ chinook-destroy:
 			-var="typesense_protocol=$(TYPESENSE_PROTOCOL)" \
 			-var="openai_api_key=$(TEST_OPENAI_API_KEY)" || true
 	@echo "✓ Chinook resources destroyed!"
+
+# Compile the chinook e2e test binary to a stable path under bin/ and run
+# it directly. Pre-compiling keeps the executable path stable across runs so
+# Windows Firewall only prompts once per binary (when the in-process mock
+# OpenAI server first listens on 0.0.0.0). Use RUN=<TestName> to filter.
+#
+# On Windows, run scripts/setup-windows-firewall.ps1 once (as Administrator)
+# to pre-allow this binary so the popup never appears.
+RUN ?= .
+chinook-e2e:
+	@echo "Compiling chinook e2e test binary..."
+	@mkdir -p "$(CURDIR)/bin/chinooktest"
+ifeq ($(OS),Windows_NT)
+	@go test -tags e2e -c -o "$(CURDIR)/bin/chinooktest/chinooktest.test.exe" ./internal/chinooktest
+	@echo "Running chinook e2e tests..."
+	@"$(CURDIR)/bin/chinooktest/chinooktest.test.exe" -test.run "$(RUN)" -test.v -test.timeout 30m -test.count=1
+else
+	@go test -tags e2e -c -o "$(CURDIR)/bin/chinooktest/chinooktest.test" ./internal/chinooktest
+	@echo "Running chinook e2e tests..."
+	@"$(CURDIR)/bin/chinooktest/chinooktest.test" -test.run "$(RUN)" -test.v -test.timeout 30m -test.count=1
+endif
 
 # Full chinook test cycle
 chinook-test:
