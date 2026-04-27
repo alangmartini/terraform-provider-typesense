@@ -15,7 +15,7 @@ Flat checklist tracking implementation progress. Source of truth is `tasks/plan.
 - [x] Checkpoint 1: helpers green
 
 ## Phase 2: Tier 1 vertical slices (v30)
-- [ ] 2.1 `apply_test.go` — TestApply
+- [x] 2.1 `apply_test.go` — TestApply (~20s wall-clock; stable across 2 runs)
 - [ ] 2.2 `update_test.go` — TestUpdate
 - [ ] 2.3 `drift_test.go` — TestDrift
 - [ ] 2.4 `import_roundtrip_test.go` — TestImportRoundtrip
