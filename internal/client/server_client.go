@@ -1049,12 +1049,24 @@ func (c *ServerClient) ListAnalyticsRules(ctx context.Context) ([]AnalyticsRule,
 		return nil, fmt.Errorf("failed to list analytics rules: status %d, body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	var result []AnalyticsRule
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	return result, nil
+	// v30+ returns a bare array; v28-v29 wrap it as {"rules": [...]}.
+	var direct []AnalyticsRule
+	if err := json.Unmarshal(bodyBytes, &direct); err == nil {
+		return direct, nil
+	}
+
+	var wrapped struct {
+		Rules []AnalyticsRule `json:"rules"`
+	}
+	if err := json.Unmarshal(bodyBytes, &wrapped); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return wrapped.Rules, nil
 }
 
 // CreateAPIKey creates a new API key
