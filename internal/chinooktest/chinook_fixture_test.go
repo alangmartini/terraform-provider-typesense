@@ -70,6 +70,14 @@ func chinookSkip(ver string) map[string]bool {
 		skip["nl_search_model.tf"] = true
 	}
 
+	// outputs.tf references analytics_rules and nl_search_model resources
+	// directly. Drop it whenever either is unavailable so the missing
+	// references don't fail the plan. Outputs are diagnostic only and not
+	// asserted by the e2e tests.
+	if skip["analytics.tf"] || skip["nl_search_model.tf"] {
+		skip["outputs.tf"] = true
+	}
+
 	// conversation_model.tf is dropped from materialized fixtures across
 	// all versions: Typesense validates the model by calling the LLM, and
 	// Phase 0 of the e2e plan only confirmed mock interception for
