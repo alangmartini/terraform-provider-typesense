@@ -553,9 +553,18 @@ func (r *OverrideResource) updateModelFromOverride(ctx context.Context, data *Ov
 		tagsValue = types.ListNull(types.StringType)
 	}
 
+	queryValue := types.StringNull()
+	if override.Rule.Query != "" {
+		queryValue = types.StringValue(override.Rule.Query)
+	}
+	matchValue := types.StringNull()
+	if override.Rule.Match != "" {
+		matchValue = types.StringValue(override.Rule.Match)
+	}
+
 	data.Rule, _ = types.ObjectValue(ruleAttrTypes, map[string]attr.Value{
-		"query": types.StringValue(override.Rule.Query),
-		"match": types.StringValue(override.Rule.Match),
+		"query": queryValue,
+		"match": matchValue,
 		"tags":  tagsValue,
 	})
 
