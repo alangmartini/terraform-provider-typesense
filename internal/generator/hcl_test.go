@@ -214,6 +214,28 @@ func TestGenerateOverrideBlock(t *testing.T) {
 	}
 }
 
+func TestGenerateOverrideBlockReplaceQueryEmitsRemoveMatchedTokensFalse(t *testing.T) {
+	override := &client.Override{
+		ID: "acdc_redirect",
+		Rule: client.OverrideRule{
+			Query: "acdc",
+			Match: "exact",
+		},
+		ReplaceQuery:        "AC/DC",
+		RemoveMatchedTokens: false,
+	}
+
+	block := generateOverrideBlock(override, "tracks", "tracks_acdc_redirect")
+	hcl := blockToHCL(block)
+
+	if !containsAttr(hcl, "replace_query", `"AC/DC"`) {
+		t.Error("Block should contain replace_query attribute")
+	}
+	if !containsAttr(hcl, "remove_matched_tokens", "false") {
+		t.Error("Block should explicitly emit remove_matched_tokens = false when replace_query is set")
+	}
+}
+
 func TestGenerateStopwordsBlock(t *testing.T) {
 	stopwords := &client.StopwordsSet{
 		ID:        "common_words",

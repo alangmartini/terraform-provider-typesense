@@ -293,6 +293,11 @@ func appendOverrideAttributes(body *hclwrite.Body, o *client.Override) {
 	}
 	if o.RemoveMatchedTokens {
 		body.SetAttributeValue("remove_matched_tokens", cty.BoolVal(true))
+	} else if o.ReplaceQuery != "" {
+		// Typesense rejects requests that combine replace_query with
+		// remove_matched_tokens=true, so emit the false value explicitly
+		// to override the schema default of true on round-trip.
+		body.SetAttributeValue("remove_matched_tokens", cty.BoolVal(false))
 	}
 	if o.FilterCuratedHits {
 		body.SetAttributeValue("filter_curated_hits", cty.BoolVal(true))
