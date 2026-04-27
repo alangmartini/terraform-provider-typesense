@@ -30,8 +30,8 @@ Flat checklist tracking implementation progress. Source of truth is `tasks/plan.
 - [x] Checkpoint 3: total wall-clock <5 min on dev machine (Tier 1+2 = 9 tests, ~114s on dev)
 
 ## Phase 4: Migration
-- [ ] 4.1 `migrate_v30_test.go` — TestMigrateV30
-- [ ] Checkpoint 4: migration timing baseline captured
+- [x] 4.1 `migrate_v30_test.go` — TestMigrateV30 (~30-37s isolated; seeds 3 tracks docs, runs generate --include-data + migrate --include-documents, asserts collection set, doc counts, and tracks schema fingerprint match across two v30 clusters)
+- [x] Checkpoint 4: migration timing baseline captured (~30s isolated, ~37s in full suite)
 
 ## Phase 5: Edge cases (optional)
 - [ ] 5.1 `concurrent_apply_test.go` — TestConcurrentApply
