@@ -32,21 +32,6 @@ resource "typesense_api_key" "customer_admin" {
   ]
 }
 
-# Analytics read key for reporting dashboards
-# Read-only access to analytics destination collections
-resource "typesense_api_key" "analytics_reader" {
-  description = "Read-only key for analytics dashboards"
-  actions = [
-    "documents:search",
-    "documents:get",
-  ]
-  collections = [
-    typesense_collection.track_queries.name,
-    typesense_collection.album_queries.name,
-    typesense_collection.nohits_queries.name,
-  ]
-}
-
 # Shared search key with user-provided value
 # Demonstrates multi-environment pattern: use the same key value across
 # prod/staging by passing it as a variable, so client applications don't

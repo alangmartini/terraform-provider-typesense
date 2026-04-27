@@ -120,3 +120,23 @@ resource "typesense_analytics_rule" "track_nohits" {
 #     weight                 = 1
 #   })
 # }
+
+# =============================================================================
+# ANALYTICS API KEY
+# Lives alongside the analytics rules and destination collections it scopes:
+# moving this resource keeps chinook self-consistent on Typesense versions
+# that lack analytics support (the materializer drops the whole file).
+# =============================================================================
+
+resource "typesense_api_key" "analytics_reader" {
+  description = "Read-only key for analytics dashboards"
+  actions = [
+    "documents:search",
+    "documents:get",
+  ]
+  collections = [
+    typesense_collection.track_queries.name,
+    typesense_collection.album_queries.name,
+    typesense_collection.nohits_queries.name,
+  ]
+}
