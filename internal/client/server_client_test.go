@@ -528,6 +528,7 @@ func TestAPIKeyJSONSerialization(t *testing.T) {
 // =============================================================================
 
 func TestCurationItemJSONSerialization(t *testing.T) {
+	rmt := false
 	item := CurationItem{
 		ID: "promote-sale-items",
 		Rule: OverrideRule{
@@ -543,7 +544,7 @@ func TestCurationItemJSONSerialization(t *testing.T) {
 		FilterBy:            "in_stock:true",
 		SortBy:              "discount:desc",
 		ReplaceQuery:        "",
-		RemoveMatchedTokens: false,
+		RemoveMatchedTokens: &rmt,
 		FilterCuratedHits:   true,
 		EffectiveFromTs:     1704067200,
 		EffectiveToTs:       1735689600,
@@ -564,6 +565,7 @@ func TestCurationItemJSONSerialization(t *testing.T) {
 	// Verify field names match API expectations
 	expectedFields := []string{
 		"id", "rule", "includes", "excludes", "filter_by", "sort_by",
+		"remove_matched_tokens",
 		"filter_curated_hits", "effective_from_ts", "effective_to_ts",
 		"stop_processing", "metadata",
 	}
@@ -572,6 +574,10 @@ func TestCurationItemJSONSerialization(t *testing.T) {
 		if _, ok := result[field]; !ok {
 			t.Errorf("Expected '%s' field in CurationItem JSON", field)
 		}
+	}
+
+	if got, ok := result["remove_matched_tokens"].(bool); !ok || got {
+		t.Errorf("remove_matched_tokens: got %v, want false", result["remove_matched_tokens"])
 	}
 }
 

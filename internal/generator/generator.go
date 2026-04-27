@@ -905,6 +905,10 @@ func (g *Generator) appendCurationSetResources(f *hclwrite.File, curationSets []
 }
 
 func curationItemToOverride(c *client.CurationItem) *client.Override {
+	rmt := false
+	if c.RemoveMatchedTokens != nil {
+		rmt = *c.RemoveMatchedTokens
+	}
 	return &client.Override{
 		ID:                  c.ID,
 		Rule:                c.Rule,
@@ -913,7 +917,7 @@ func curationItemToOverride(c *client.CurationItem) *client.Override {
 		FilterBy:            c.FilterBy,
 		SortBy:              c.SortBy,
 		ReplaceQuery:        c.ReplaceQuery,
-		RemoveMatchedTokens: c.RemoveMatchedTokens,
+		RemoveMatchedTokens: rmt,
 		FilterCuratedHits:   c.FilterCuratedHits,
 		EffectiveFromTs:     c.EffectiveFromTs,
 		EffectiveToTs:       c.EffectiveToTs,

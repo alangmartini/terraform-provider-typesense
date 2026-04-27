@@ -51,19 +51,24 @@ type CurationSet struct {
 
 // CurationItem represents a curation item within a curation set (v30.0+)
 type CurationItem struct {
-	ID                  string            `json:"id"`
-	Rule                OverrideRule      `json:"rule"`
-	Includes            []OverrideInclude `json:"includes,omitempty"`
-	Excludes            []OverrideExclude `json:"excludes,omitempty"`
-	FilterBy            string            `json:"filter_by,omitempty"`
-	SortBy              string            `json:"sort_by,omitempty"`
-	ReplaceQuery        string            `json:"replace_query,omitempty"`
-	RemoveMatchedTokens bool              `json:"remove_matched_tokens,omitempty"`
-	FilterCuratedHits   bool              `json:"filter_curated_hits,omitempty"`
-	EffectiveFromTs     int64             `json:"effective_from_ts,omitempty"`
-	EffectiveToTs       int64             `json:"effective_to_ts,omitempty"`
-	StopProcessing      bool              `json:"stop_processing,omitempty"`
-	Metadata            map[string]any    `json:"metadata,omitempty"`
+	ID       string            `json:"id"`
+	Rule     OverrideRule      `json:"rule"`
+	Includes []OverrideInclude `json:"includes,omitempty"`
+	Excludes []OverrideExclude `json:"excludes,omitempty"`
+	FilterBy string            `json:"filter_by,omitempty"`
+	SortBy   string            `json:"sort_by,omitempty"`
+	// ReplaceQuery and RemoveMatchedTokens are partially mutually exclusive
+	// in v30: replace_query + remove_matched_tokens=true is rejected, but
+	// replace_query + remove_matched_tokens=false is accepted. The server
+	// also defaults absent remove_matched_tokens to true, so we send the
+	// pointer explicitly when the caller wants to override that default.
+	ReplaceQuery        string         `json:"replace_query,omitempty"`
+	RemoveMatchedTokens *bool          `json:"remove_matched_tokens,omitempty"`
+	FilterCuratedHits   bool           `json:"filter_curated_hits,omitempty"`
+	EffectiveFromTs     int64          `json:"effective_from_ts,omitempty"`
+	EffectiveToTs       int64          `json:"effective_to_ts,omitempty"`
+	StopProcessing      bool           `json:"stop_processing,omitempty"`
+	Metadata            map[string]any `json:"metadata,omitempty"`
 }
 
 // NewServerClient creates a new Server API client

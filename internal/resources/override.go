@@ -653,26 +653,43 @@ func (r *OverrideResource) deleteOverrideV30(ctx context.Context, collection, na
 	return r.client.DeleteCurationSetItem(ctx, collection, name)
 }
 
-// overrideToCurationItem converts a client.Override to a client.CurationItem
+// overrideToCurationItem converts a client.Override to a client.CurationItem.
+//
+// remove_matched_tokens is sent explicitly so the server does not fall back
+// to its default of true. The single exception is the replace_query +
+// remove_matched_tokens=true combination, which the server rejects as
+// mutually exclusive — in that case we omit the field and let replace_query
+// take precedence.
 func overrideToCurationItem(o *client.Override) client.CurationItem {
-	return client.CurationItem{
-		ID:                  o.ID,
-		Rule:                o.Rule,
-		Includes:            o.Includes,
-		Excludes:            o.Excludes,
-		FilterBy:            o.FilterBy,
-		SortBy:              o.SortBy,
-		ReplaceQuery:        o.ReplaceQuery,
-		RemoveMatchedTokens: o.RemoveMatchedTokens,
-		FilterCuratedHits:   o.FilterCuratedHits,
-		EffectiveFromTs:     o.EffectiveFromTs,
-		EffectiveToTs:       o.EffectiveToTs,
-		StopProcessing:      o.StopProcessing,
+	ci := client.CurationItem{
+		ID:                o.ID,
+		Rule:              o.Rule,
+		Includes:          o.Includes,
+		Excludes:          o.Excludes,
+		FilterBy:          o.FilterBy,
+		SortBy:            o.SortBy,
+		ReplaceQuery:      o.ReplaceQuery,
+		FilterCuratedHits: o.FilterCuratedHits,
+		EffectiveFromTs:   o.EffectiveFromTs,
+		EffectiveToTs:     o.EffectiveToTs,
+		StopProcessing:    o.StopProcessing,
 	}
+	if !(o.ReplaceQuery != "" && o.RemoveMatchedTokens) {
+		rmt := o.RemoveMatchedTokens
+		ci.RemoveMatchedTokens = &rmt
+	}
+	return ci
 }
 
-// curationItemToOverride converts a client.CurationItem to a client.Override
+// curationItemToOverride converts a client.CurationItem to a client.Override.
+// A nil RemoveMatchedTokens pointer means the server stored no value; we
+// surface that as false so the model stays comparable with state read from
+// per-collection v29 endpoints.
 func curationItemToOverride(c *client.CurationItem) *client.Override {
+	rmt := false
+	if c.RemoveMatchedTokens != nil {
+		rmt = *c.RemoveMatchedTokens
+	}
 	return &client.Override{
 		ID:                  c.ID,
 		Rule:                c.Rule,
@@ -681,7 +698,7 @@ func curationItemToOverride(c *client.CurationItem) *client.Override {
 		FilterBy:            c.FilterBy,
 		SortBy:              c.SortBy,
 		ReplaceQuery:        c.ReplaceQuery,
-		RemoveMatchedTokens: c.RemoveMatchedTokens,
+		RemoveMatchedTokens: rmt,
 		FilterCuratedHits:   c.FilterCuratedHits,
 		EffectiveFromTs:     c.EffectiveFromTs,
 		EffectiveToTs:       c.EffectiveToTs,
