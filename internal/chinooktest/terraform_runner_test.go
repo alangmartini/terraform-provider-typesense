@@ -82,6 +82,34 @@ func (tf *Terraform) Plan(vars map[string]string) (int, error) {
 	return tf.runExit("plan", args)
 }
 
+// PlanWithOutput runs `terraform plan -detailed-exitcode` and returns the
+// exit code, combined output, and error. Used by tests that need to inspect
+// the diff when the plan exits non-zero.
+func (tf *Terraform) PlanWithOutput(vars map[string]string) (int, string, error) {
+	args := append([]string{"plan", "-detailed-exitcode", "-state=" + tf.state}, varFlags(vars)...)
+	cmd := exec.Command(tf.binary, args...)
+	cmd.Dir = tf.workDir
+	cmd.Env = tf.env
+
+	var combined bytes.Buffer
+	cmd.Stdout = &combined
+	cmd.Stderr = &combined
+
+	err := cmd.Run()
+	exitCode := 0
+	if err != nil {
+		var exitErr *exec.ExitError
+		if asExitErr(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
+			if exitCode == 2 {
+				return exitCode, combined.String(), nil
+			}
+		}
+		return exitCode, combined.String(), err
+	}
+	return exitCode, combined.String(), nil
+}
+
 func (tf *Terraform) run(subcmd string, args []string) error {
 	_, err := tf.runExit(subcmd, args)
 	return err
