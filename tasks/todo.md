@@ -8,7 +8,7 @@ Flat checklist tracking implementation progress. Source of truth is `tasks/plan.
 - [x] Checkpoint 0
 
 ## Phase 1: Foundation
-- [ ] 1.1 Container helper (`harness_test.go`) + `harness_smoke_test.go`
+- [x] 1.1 Container helper (`harness_test.go`) + `harness_smoke_test.go`
 - [ ] 1.2 Terraform runner helper (extends `harness_test.go`)
 - [ ] 1.3 Mock OpenAI server (`mock_openai_test.go`) + smoke test
 - [ ] 1.4 Chinook fixture materializer (`chinook_fixture_test.go`)
