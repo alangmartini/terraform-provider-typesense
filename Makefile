@@ -303,23 +303,10 @@ else
 	@"$(CURDIR)/bin/chinooktest/chinooktest.test" -test.run "$(RUN)" -test.v -test.timeout 30m -test.count=1
 endif
 
-# Full chinook test cycle
+# Full chinook test cycle. Delegates to chinook-e2e, which compiles the
+# Go e2e suite to a stable bin path and runs every TestApply/TestUpdate/
+# TestDrift/TestImportRoundtrip/TestGenerateIdempotent/TestVersionVxx/
+# TestMigrateVxx scenario. Each test owns its Typesense container, so this
+# target no longer manages start-typesense / chinook-apply lifecycle.
 chinook-test:
-	@echo "Running full chinook example test..."
-	@rm -rf "$(CHINOOK_STATE_DIR)"
-	@"$(MAKE)" build
-	@"$(MAKE)" start-typesense
-	@"$(MAKE)" chinook-apply || ("$(MAKE)" stop-typesense && exit 1)
-	@echo ""
-	@echo "Verifying resources, document fixtures, and generate output..."
-	@TYPESENSE_HOST=$(TYPESENSE_HOST) \
-	TYPESENSE_PORT=$(PORT) \
-	TYPESENSE_PROTOCOL=$(TYPESENSE_PROTOCOL) \
-	TYPESENSE_API_KEY=$(TYPESENSE_API_KEY) \
-	TEST_OPENAI_API_KEY="$(TEST_OPENAI_API_KEY)" \
-	"$(SHELL)" "$(CURDIR)/scripts/verify-chinook-generate.sh" || ("$(MAKE)" chinook-destroy; "$(MAKE)" stop-typesense; exit 1)
-	@echo ""
-	@"$(MAKE)" chinook-destroy
-	@"$(MAKE)" stop-typesense
-	@echo ""
-	@echo "✓ Chinook test complete!"
+	@"$(MAKE)" chinook-e2e RUN=.
