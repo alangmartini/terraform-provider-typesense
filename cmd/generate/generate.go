@@ -137,6 +137,9 @@ Examples:
 	fmt.Println()
 
 	ctx := context.Background()
+	if err := gen.DetectServerVersion(ctx); err != nil {
+		return fmt.Errorf("server version detection failed: %w", err)
+	}
 	if err := gen.Generate(ctx); err != nil {
 		return fmt.Errorf("generation failed: %w", err)
 	}

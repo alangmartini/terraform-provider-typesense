@@ -525,9 +525,15 @@ func (g *Generator) generateCollectionAliases(ctx context.Context, f *hclwrite.F
 }
 
 func (g *Generator) generateStopwords(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
+	if g.serverVersion != nil && !g.featureChecker.SupportsFeature(version.FeatureStopwords) {
+		return nil
+	}
+
 	stopwordsSets, err := g.serverClient.ListStopwordsSets(ctx)
 	if err != nil {
-		return err
+		// Stopwords are only available on Typesense v27.0+.
+		fmt.Fprintf(os.Stderr, "Warning: Could not list stopwords: %v\n", err)
+		return nil
 	}
 
 	// Export stopwords data if data export is enabled (even if empty, creates the file)
@@ -926,9 +932,15 @@ func curationItemToOverride(c *client.CurationItem) *client.Override {
 }
 
 func (g *Generator) generateAnalyticsRules(ctx context.Context, f *hclwrite.File, resourceNames map[string]bool, importCommands *[]ImportCommand) error {
+	if g.serverVersion != nil && !g.featureChecker.SupportsFeature(version.FeatureAnalyticsRules) {
+		return nil
+	}
+
 	rules, err := g.serverClient.ListAnalyticsRules(ctx)
 	if err != nil {
-		return err
+		// Analytics rules are only available on Typesense v28.0+.
+		fmt.Fprintf(os.Stderr, "Warning: Could not list analytics rules: %v\n", err)
+		return nil
 	}
 
 	if len(rules) == 0 {
