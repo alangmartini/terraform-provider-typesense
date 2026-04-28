@@ -39,8 +39,10 @@ target_cluster.txt
 .DS_Store
 source_cluster.txt
 
-# Claude Code settings (local only)
-.claude/
+# Claude Code settings (local only) — except shared skills, which are
+# committed so any AI assistant working on the repo picks them up.
+.claude/*
+!.claude/skills/
 
 # Production backups (sensitive)
 prod-backup/
