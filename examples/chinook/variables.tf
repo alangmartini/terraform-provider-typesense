@@ -37,6 +37,15 @@ variable "nl_model_name" {
   default     = "openai/gpt-4o-mini"
 }
 
+# Optional override for the LLM endpoint, used by the chinook E2E suite to
+# redirect Typesense's nl_search_model validation call at an in-process mock
+# server instead of api.openai.com. Empty string keeps the default behavior.
+variable "mock_openai_url" {
+  type        = string
+  description = "Override URL for the LLM endpoint (test hook; leave empty in production)"
+  default     = ""
+}
+
 # Conversation Model (RAG) configuration
 variable "conversation_model_name" {
   type        = string

@@ -20,7 +20,7 @@ func TestCreateClusterConfigChange_Payload(t *testing.T) {
 		capturedPath = r.URL.Path
 		capturedBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(ClusterConfigChange{
+		_ = json.NewEncoder(w).Encode(ClusterConfigChange{
 			ID:        "change-123",
 			ClusterID: "cluster-abc",
 			Status:    "queued",
@@ -92,7 +92,7 @@ func TestWaitForClusterReady_AfterConfigChange(t *testing.T) {
 		if count >= 2 {
 			status = "in_service"
 		}
-		json.NewEncoder(w).Encode(Cluster{
+		_ = json.NewEncoder(w).Encode(Cluster{
 			ID:     "cluster-abc",
 			Name:   "test",
 			Status: status,
@@ -177,7 +177,7 @@ func TestCreateClusterConfigChange_OnlyChangedFields(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				capturedBody, _ = io.ReadAll(r.Body)
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(ClusterConfigChange{ID: "ch-1", Status: "queued"})
+				_ = json.NewEncoder(w).Encode(ClusterConfigChange{ID: "ch-1", Status: "queued"})
 			}))
 			defer server.Close()
 
@@ -220,7 +220,7 @@ func TestUpdateCluster_DirectFieldsOnly(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedMethod = r.Method
 		capturedBody, _ = io.ReadAll(r.Body)
-		json.NewEncoder(w).Encode(Cluster{
+		_ = json.NewEncoder(w).Encode(Cluster{
 			ID:                  "cluster-abc",
 			Name:                "new-name",
 			AutoUpgradeCapacity: true,

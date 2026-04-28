@@ -256,7 +256,7 @@ const (
 	FeatureNLSearchModels Feature = "nl_search_models"
 
 	// FeatureStemmingDictionaries indicates support for stemming dictionaries
-	// Available in v29.0+
+	// Available in v28.0+
 	FeatureStemmingDictionaries Feature = "stemming_dictionaries"
 )
 
@@ -272,7 +272,7 @@ var featureVersions = map[Feature]*Version{
 	FeatureStopwords:              V27_0,
 	FeatureAnalyticsRules:         V28_0,
 	FeatureNLSearchModels:         V29_0,
-	FeatureStemmingDictionaries:   V29_0,
+	FeatureStemmingDictionaries:   V28_0,
 }
 
 // featureMaxVersions maps features to their maximum supported version (exclusive).

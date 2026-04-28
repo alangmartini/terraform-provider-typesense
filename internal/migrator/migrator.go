@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -184,8 +185,7 @@ func (m *Migrator) importDocuments(ctx context.Context, collectionName string, d
 	defer file.Close()
 
 	// Create import request with streaming body
-	url := fmt.Sprintf("%s/collections/%s/documents/import?action=upsert", m.baseURL, collectionName)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, file)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, importDocumentsURL(m.baseURL, collectionName), file)
 	if err != nil {
 		return fmt.Errorf("failed to create import request: %w", err)
 	}
@@ -218,6 +218,10 @@ func (m *Migrator) importDocuments(ctx context.Context, collectionName string, d
 	}
 
 	return nil
+}
+
+func importDocumentsURL(baseURL, collectionName string) string {
+	return fmt.Sprintf("%s/collections/%s/documents/import?action=upsert", strings.TrimRight(baseURL, "/"), url.PathEscape(collectionName))
 }
 
 // processImportResponse reads the import response and counts successes/failures

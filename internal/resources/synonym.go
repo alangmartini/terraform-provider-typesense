@@ -18,8 +18,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// synonymSetMu serializes synonym set creation to prevent race conditions
-// where concurrent creates could overwrite each other's items via set-level PUT.
+// synonymSetMu serializes v30 set ensure + item upsert sequences to prevent
+// empty-set creates from overwriting items added by other Terraform resources.
 var synonymSetMu sync.Map // map[string]*sync.Mutex
 
 var _ resource.Resource = &SynonymResource{}
@@ -375,27 +375,25 @@ func (r *SynonymResource) ImportState(ctx context.Context, req resource.ImportSt
 
 // v30+ helper methods for synonym sets
 
-// getSetMutex returns a per-collection mutex for serializing synonym set creation.
+// getSetMutex returns a per-collection mutex for serializing synonym set writes.
 func getSetMutex(collection string) *sync.Mutex {
 	mu, _ := synonymSetMu.LoadOrStore(collection, &sync.Mutex{})
 	return mu.(*sync.Mutex)
 }
 
 // ensureSynonymSetExists ensures the synonym set for a collection exists, creating it if needed.
-// Uses a per-collection mutex to prevent the race condition where concurrent empty-set creates
-// could overwrite items added by other goroutines.
 func (r *SynonymResource) ensureSynonymSetExists(ctx context.Context, collection string) error {
-	mu := getSetMutex(collection)
-	mu.Lock()
-	defer mu.Unlock()
-
 	return r.client.EnsureSynonymSetExists(ctx, collection)
 }
 
 // createSynonymV30 creates or updates a synonym using the v30 synonym sets item-level API.
 // The collection name is used as the synonym set name.
 func (r *SynonymResource) createSynonymV30(ctx context.Context, collection, name, root string, synonyms []string) error {
-	// Ensure the synonym set exists (serialized per collection)
+	mu := getSetMutex(collection)
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Ensure the synonym set exists before using the item-level API.
 	if err := r.ensureSynonymSetExists(ctx, collection); err != nil {
 		return fmt.Errorf("failed to ensure synonym set: %w", err)
 	}

@@ -128,16 +128,16 @@ This creates:
 | File | Contents |
 |------|----------|
 | `main.tf` | All resources as Terraform configuration |
-| `imports.sh` | `terraform import` commands for every resource |
+| `imports.tf` | Import blocks for every resource (Terraform 1.5+) |
 
 Then import into Terraform state:
 
 ```bash
 cd my-typesense-config
 terraform init
-chmod +x imports.sh
-./imports.sh
-terraform plan   # Should show "No changes"
+terraform apply   # Imports existing resources via imports.tf
+terraform plan    # Should show "No changes"
+rm imports.tf     # No longer needed after import
 ```
 
 ### Importing Individual Resources
@@ -250,13 +250,38 @@ cd terraform-provider-typesense
 go build -o terraform-provider-typesense .
 ```
 
-### Acceptance Tests
+### End-to-end Tests
+
+The `internal/chinooktest/` package is the canonical e2e suite. Each test
+launches its own Typesense container at the version under test, applies a
+materialized chinook fixture, exercises a single concern (apply, update,
+drift, import-roundtrip, generate idempotency, per-version coverage,
+migration), and tears the container down.
 
 ```bash
-make chinook-test     # Full cycle: start Typesense, apply, verify, cleanup
-make chinook-apply    # Apply only (assumes Typesense is running)
-make chinook-destroy  # Tear down chinook resources
+make chinook-test                       # Run the full suite (~6 min on dev)
+make chinook-e2e RUN=TestApply          # Run a single scenario
+make chinook-e2e RUN='Version|Migrate'  # Filter by regex
 ```
+
+`make chinook-e2e` pre-compiles the test binary to `bin/chinooktest/` so
+Windows Defender Firewall only prompts once per binary. On Windows you
+can pre-allow both binaries non-interactively:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-windows-firewall.ps1
+```
+
+For ad-hoc local development against a long-running cluster:
+
+```bash
+make start-typesense                    # Start a shared Typesense container
+make chinook-apply                      # Apply chinook against it
+make chinook-destroy                    # Tear chinook resources down
+```
+
+See [`docs/testing/chinook-e2e.md`](docs/testing/chinook-e2e.md) for the
+list of scenarios and how to add a new one.
 
 ### CLI Commands
 

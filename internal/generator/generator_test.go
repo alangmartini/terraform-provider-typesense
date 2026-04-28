@@ -3,9 +3,17 @@ package generator
 import (
 	"context"
 	"errors"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
+	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
+	"github.com/alanm/terraform-provider-typesense/internal/version"
+	"github.com/hashicorp/hcl/v2/hclwrite"
 )
 
 func TestClusterMatchesHost(t *testing.T) {
@@ -80,6 +88,114 @@ func TestClusterMatchesHost(t *testing.T) {
 				t.Errorf("clusterMatchesHost() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func newGeneratorForTestServer(t *testing.T, handler http.HandlerFunc) (*Generator, func()) {
+	t.Helper()
+
+	server := httptest.NewServer(handler)
+	serverURL := strings.TrimPrefix(server.URL, "http://")
+	host, portStr, err := net.SplitHostPort(serverURL)
+	if err != nil {
+		server.Close()
+		t.Fatalf("failed to parse test server URL: %v", err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		server.Close()
+		t.Fatalf("failed to parse test server port: %v", err)
+	}
+
+	g := New(&Config{
+		Host:     host,
+		Port:     port,
+		Protocol: "http",
+		APIKey:   "test-key",
+	})
+
+	return g, server.Close
+}
+
+func TestGenerateSynonymSetsV30EmitsImportableSynonymResources(t *testing.T) {
+	g, cleanup := newGeneratorForTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/synonym_sets" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"name":"products","items":[{"id":"shoe terms","synonyms":["shoe","sneaker"]}]}]`))
+	})
+	defer cleanup()
+
+	g.serverVersion = version.MustParse("30.0")
+	g.featureChecker = version.NewFeatureChecker(g.serverVersion)
+
+	f := hclwrite.NewEmptyFile()
+	resourceNames := make(map[string]bool)
+	collectionResourceMap := make(map[string]string)
+	var importCommands []ImportCommand
+
+	if err := g.generateSynonyms(context.Background(), f, resourceNames, collectionResourceMap, &importCommands); err != nil {
+		t.Fatalf("generateSynonyms() returned error: %v", err)
+	}
+
+	hcl := string(f.Bytes())
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourceSynonym)+`"`) {
+		t.Fatalf("generated HCL did not contain synonym resource:\n%s", hcl)
+	}
+	if !strings.Contains(hcl, `collection = "products"`) {
+		t.Fatalf("generated HCL did not contain literal synonym set name:\n%s", hcl)
+	}
+	if len(importCommands) != 1 {
+		t.Fatalf("generateSynonyms() produced %d import commands, want 1", len(importCommands))
+	}
+	if importCommands[0].ImportID != "products/shoe terms" {
+		t.Fatalf("synonym import ID = %q, want %q", importCommands[0].ImportID, "products/shoe terms")
+	}
+}
+
+func TestGenerateCurationSetsV30EmitsImportableOverrideResources(t *testing.T) {
+	g, cleanup := newGeneratorForTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/curation_sets" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"name":"products","items":[{"id":"featured","rule":{"query":"sale","match":"exact"}}]}]`))
+	})
+	defer cleanup()
+
+	g.serverVersion = version.MustParse("30.0")
+	g.featureChecker = version.NewFeatureChecker(g.serverVersion)
+
+	f := hclwrite.NewEmptyFile()
+	resourceNames := make(map[string]bool)
+	collectionResourceMap := make(map[string]string)
+	var importCommands []ImportCommand
+
+	if err := g.generateOverrides(context.Background(), f, resourceNames, collectionResourceMap, &importCommands); err != nil {
+		t.Fatalf("generateOverrides() returned error: %v", err)
+	}
+
+	hcl := string(f.Bytes())
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourceOverride)+`"`) {
+		t.Fatalf("generated HCL did not contain override resource:\n%s", hcl)
+	}
+	if !strings.Contains(hcl, `collection = "products"`) {
+		t.Fatalf("generated HCL did not contain literal curation set name:\n%s", hcl)
+	}
+	if len(importCommands) != 1 {
+		t.Fatalf("generateOverrides() produced %d import commands, want 1", len(importCommands))
+	}
+	if importCommands[0].ImportID != "products/featured" {
+		t.Fatalf("override import ID = %q, want %q", importCommands[0].ImportID, "products/featured")
+	}
+}
+
+func TestDocumentExportURLEscapesCollectionName(t *testing.T) {
+	got := documentExportURL("http", "127.0.0.1", 8108, "docs / prod")
+	want := "http://127.0.0.1:8108/collections/docs%20%2F%20prod/documents/export"
+	if got != want {
+		t.Fatalf("documentExportURL() = %q, want %q", got, want)
 	}
 }
 

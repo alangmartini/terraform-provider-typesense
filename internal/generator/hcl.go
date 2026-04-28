@@ -192,6 +192,20 @@ func generateSynonymBlock(s *client.Synonym, collectionResourceName, resourceNam
 		{Type: 10, Bytes: []byte("\n")}, // TokenNewline
 	})
 
+	appendSynonymAttributes(body, s)
+	return block
+}
+
+func generateSynonymBlockWithCollectionLiteral(s *client.Synonym, collectionName, resourceName string) *hclwrite.Block {
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourceSynonym), resourceName})
+	body := block.Body()
+
+	body.SetAttributeValue("collection", cty.StringVal(collectionName))
+	appendSynonymAttributes(body, s)
+	return block
+}
+
+func appendSynonymAttributes(body *hclwrite.Body, s *client.Synonym) {
 	body.SetAttributeValue("name", cty.StringVal(s.ID))
 
 	if s.Root != "" {
@@ -205,8 +219,6 @@ func generateSynonymBlock(s *client.Synonym, collectionResourceName, resourceNam
 		}
 		body.SetAttributeValue("synonyms", cty.ListVal(vals))
 	}
-
-	return block
 }
 
 // generateOverrideBlock creates an HCL block for an override resource
@@ -222,6 +234,20 @@ func generateOverrideBlock(o *client.Override, collectionResourceName, resourceN
 		{Type: 10, Bytes: []byte("\n")},
 	})
 
+	appendOverrideAttributes(body, o)
+	return block
+}
+
+func generateOverrideBlockWithCollectionLiteral(o *client.Override, collectionName, resourceName string) *hclwrite.Block {
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourceOverride), resourceName})
+	body := block.Body()
+
+	body.SetAttributeValue("collection", cty.StringVal(collectionName))
+	appendOverrideAttributes(body, o)
+	return block
+}
+
+func appendOverrideAttributes(body *hclwrite.Body, o *client.Override) {
 	body.SetAttributeValue("name", cty.StringVal(o.ID))
 
 	ruleVals := make(map[string]cty.Value)
@@ -267,6 +293,11 @@ func generateOverrideBlock(o *client.Override, collectionResourceName, resourceN
 	}
 	if o.RemoveMatchedTokens {
 		body.SetAttributeValue("remove_matched_tokens", cty.BoolVal(true))
+	} else if o.ReplaceQuery != "" {
+		// Typesense rejects requests that combine replace_query with
+		// remove_matched_tokens=true, so emit the false value explicitly
+		// to override the schema default of true on round-trip.
+		body.SetAttributeValue("remove_matched_tokens", cty.BoolVal(false))
 	}
 	if o.FilterCuratedHits {
 		body.SetAttributeValue("filter_curated_hits", cty.BoolVal(true))
@@ -280,8 +311,6 @@ func generateOverrideBlock(o *client.Override, collectionResourceName, resourceN
 	if o.EffectiveToTs > 0 {
 		body.SetAttributeValue("effective_to_ts", cty.NumberIntVal(o.EffectiveToTs))
 	}
-
-	return block
 }
 
 // generateStopwordsBlock creates an HCL block for a stopwords set resource
@@ -302,6 +331,61 @@ func generateStopwordsBlock(sw *client.StopwordsSet, resourceName string) *hclwr
 	if sw.Locale != "" {
 		body.SetAttributeValue("locale", cty.StringVal(sw.Locale))
 	}
+
+	return block
+}
+
+// generateCollectionAliasBlock creates an HCL block for a collection alias resource
+func generateCollectionAliasBlock(alias *client.CollectionAlias, resourceName string) *hclwrite.Block {
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourceCollectionAlias), resourceName})
+	body := block.Body()
+
+	body.SetAttributeValue("name", cty.StringVal(alias.Name))
+	body.SetAttributeValue("collection_name", cty.StringVal(alias.CollectionName))
+
+	return block
+}
+
+// generatePresetBlock creates an HCL block for a search preset resource
+func generatePresetBlock(preset *client.Preset, resourceName string) *hclwrite.Block {
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourcePreset), resourceName})
+	body := block.Body()
+
+	body.SetAttributeValue("name", cty.StringVal(preset.Name))
+	if preset.Value != nil {
+		valueJSON, err := json.Marshal(preset.Value)
+		if err == nil {
+			body.SetAttributeValue("value", cty.StringVal(string(valueJSON)))
+		}
+	}
+
+	return block
+}
+
+// generateStemmingDictionaryBlock creates an HCL block for a stemming dictionary resource
+func generateStemmingDictionaryBlock(dictionary *client.StemmingDictionary, resourceName string) *hclwrite.Block {
+	block := hclwrite.NewBlock("resource", []string{tfnames.FullTypeName(tfnames.ResourceStemmingDictionary), resourceName})
+	body := block.Body()
+
+	body.SetAttributeValue("dictionary_id", cty.StringVal(dictionary.ID))
+
+	wordType := map[string]cty.Type{
+		"word": cty.String,
+		"stem": cty.String,
+	}
+	if len(dictionary.Words) == 0 {
+		body.SetAttributeValue("words", cty.ListValEmpty(cty.Object(wordType)))
+		return block
+	}
+
+	values := make([]cty.Value, len(dictionary.Words))
+	for i, word := range dictionary.Words {
+		values[i] = cty.ObjectVal(map[string]cty.Value{
+			"word": cty.StringVal(word.Word),
+			"stem": cty.StringVal(word.Stem),
+		})
+	}
+	body.SetAttributeValue("words", cty.ListVal(values))
 
 	return block
 }

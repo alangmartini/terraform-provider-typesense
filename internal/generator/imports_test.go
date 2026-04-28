@@ -7,7 +7,7 @@ import (
 	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
 )
 
-func TestGenerateImportScript(t *testing.T) {
+func TestGenerateImportBlocks(t *testing.T) {
 	commands := []ImportCommand{
 		{
 			ResourceType: tfnames.FullTypeName(tfnames.ResourceCollection),
@@ -21,22 +21,51 @@ func TestGenerateImportScript(t *testing.T) {
 		},
 	}
 
-	script := GenerateImportScript(commands)
+	f := GenerateImportBlocks(commands)
+	output := string(f.Bytes())
 
-	// Check header
-	if !strings.HasPrefix(script, "#!/bin/bash") {
-		t.Error("Script should start with shebang")
-	}
-	if !strings.Contains(script, "set -e") {
-		t.Error("Script should have error handling")
+	// Check header comment
+	if !strings.Contains(output, "Generated Terraform import blocks") {
+		t.Error("Output should contain header comment")
 	}
 
-	// Check import commands
-	if !strings.Contains(script, `terraform import `+tfnames.FullTypeName(tfnames.ResourceCollection)+`.products "products"`) {
-		t.Error("Script should contain collection import command")
+	// Check collection import block
+	if !strings.Contains(output, tfnames.FullTypeName(tfnames.ResourceCollection)+".products") {
+		t.Error("Output should contain collection import block 'to' reference")
 	}
-	if !strings.Contains(script, `terraform import `+tfnames.FullTypeName(tfnames.ResourceSynonym)+`.products_clothing "products/clothing"`) {
-		t.Error("Script should contain synonym import command")
+	if !strings.Contains(output, `id = "products"`) {
+		t.Error("Output should contain collection import ID")
+	}
+
+	// Check synonym import block
+	if !strings.Contains(output, tfnames.FullTypeName(tfnames.ResourceSynonym)+".products_clothing") {
+		t.Error("Output should contain synonym import block 'to' reference")
+	}
+	if !strings.Contains(output, `id = "products/clothing"`) {
+		t.Error("Output should contain synonym import ID")
+	}
+
+	// Check that it uses import blocks, not terraform import commands
+	if strings.Contains(output, "terraform import") {
+		t.Error("Output should use import blocks, not terraform import CLI commands")
+	}
+	if strings.Contains(output, "#!/bin/bash") {
+		t.Error("Output should not be a bash script")
+	}
+
+	// Count import blocks
+	importCount := strings.Count(output, "import {")
+	if importCount != 2 {
+		t.Errorf("Expected 2 import blocks, got %d", importCount)
+	}
+}
+
+func TestGenerateImportBlocksEmpty(t *testing.T) {
+	f := GenerateImportBlocks(nil)
+	output := string(f.Bytes())
+
+	if strings.Contains(output, "import {") {
+		t.Error("Empty commands should produce no import blocks")
 	}
 }
 
@@ -103,7 +132,28 @@ func TestConversationModelImportID(t *testing.T) {
 	}
 }
 
-func TestImportScriptWithNewResourceTypes(t *testing.T) {
+func TestCollectionAliasImportID(t *testing.T) {
+	id := CollectionAliasImportID("music")
+	if id != "music" {
+		t.Errorf("CollectionAliasImportID = %q, want %q", id, "music")
+	}
+}
+
+func TestPresetImportID(t *testing.T) {
+	id := PresetImportID("track-listing")
+	if id != "track-listing" {
+		t.Errorf("PresetImportID = %q, want %q", id, "track-listing")
+	}
+}
+
+func TestStemmingDictionaryImportID(t *testing.T) {
+	id := StemmingDictionaryImportID("music-terms")
+	if id != "music-terms" {
+		t.Errorf("StemmingDictionaryImportID = %q, want %q", id, "music-terms")
+	}
+}
+
+func TestImportBlocksWithNewResourceTypes(t *testing.T) {
 	commands := []ImportCommand{
 		{
 			ResourceType: tfnames.FullTypeName(tfnames.ResourceAnalyticsRule),
@@ -125,20 +175,50 @@ func TestImportScriptWithNewResourceTypes(t *testing.T) {
 			ResourceName: "conv_model_1",
 			ImportID:     "conv_model_1",
 		},
+		{
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceCollectionAlias),
+			ResourceName: "music",
+			ImportID:     "music",
+		},
+		{
+			ResourceType: tfnames.FullTypeName(tfnames.ResourcePreset),
+			ResourceName: "track_listing",
+			ImportID:     "track-listing",
+		},
+		{
+			ResourceType: tfnames.FullTypeName(tfnames.ResourceStemmingDictionary),
+			ResourceName: "music_terms",
+			ImportID:     "music-terms",
+		},
 	}
 
-	script := GenerateImportScript(commands)
+	f := GenerateImportBlocks(commands)
+	output := string(f.Bytes())
 
-	if !strings.Contains(script, `terraform import `+tfnames.FullTypeName(tfnames.ResourceAnalyticsRule)+`.popular_searches "popular_searches"`) {
-		t.Error("Script should contain analytics rule import command")
+	if !strings.Contains(output, tfnames.FullTypeName(tfnames.ResourceAnalyticsRule)+".popular_searches") {
+		t.Error("Output should contain analytics rule import block")
 	}
-	if !strings.Contains(script, `terraform import `+tfnames.FullTypeName(tfnames.ResourceAPIKey)+`.search_only_key "1"`) {
-		t.Error("Script should contain API key import command")
+	if !strings.Contains(output, tfnames.FullTypeName(tfnames.ResourceAPIKey)+".search_only_key") {
+		t.Error("Output should contain API key import block")
 	}
-	if !strings.Contains(script, `terraform import `+tfnames.FullTypeName(tfnames.ResourceNLSearchModel)+`.nl_model_1 "nl_model_1"`) {
-		t.Error("Script should contain NL search model import command")
+	if !strings.Contains(output, tfnames.FullTypeName(tfnames.ResourceNLSearchModel)+".nl_model_1") {
+		t.Error("Output should contain NL search model import block")
 	}
-	if !strings.Contains(script, `terraform import `+tfnames.FullTypeName(tfnames.ResourceConversationModel)+`.conv_model_1 "conv_model_1"`) {
-		t.Error("Script should contain conversation model import command")
+	if !strings.Contains(output, tfnames.FullTypeName(tfnames.ResourceConversationModel)+".conv_model_1") {
+		t.Error("Output should contain conversation model import block")
+	}
+	if !strings.Contains(output, tfnames.FullTypeName(tfnames.ResourceCollectionAlias)+".music") {
+		t.Error("Output should contain collection alias import block")
+	}
+	if !strings.Contains(output, tfnames.FullTypeName(tfnames.ResourcePreset)+".track_listing") {
+		t.Error("Output should contain preset import block")
+	}
+	if !strings.Contains(output, tfnames.FullTypeName(tfnames.ResourceStemmingDictionary)+".music_terms") {
+		t.Error("Output should contain stemming dictionary import block")
+	}
+
+	importCount := strings.Count(output, "import {")
+	if importCount != 7 {
+		t.Errorf("Expected 7 import blocks, got %d", importCount)
 	}
 }

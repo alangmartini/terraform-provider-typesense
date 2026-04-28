@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/alanm/terraform-provider-typesense/internal/client"
 	"github.com/alanm/terraform-provider-typesense/internal/tfnames"
@@ -20,6 +21,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 )
+
+// curationSetMu serializes v30 set ensure + item upsert sequences to prevent
+// empty-set creates from overwriting items added by other Terraform resources.
+var curationSetMu sync.Map // map[string]*sync.Mutex
 
 var _ resource.Resource = &OverrideResource{}
 var _ resource.ResourceWithImportState = &OverrideResource{}
@@ -548,9 +553,18 @@ func (r *OverrideResource) updateModelFromOverride(ctx context.Context, data *Ov
 		tagsValue = types.ListNull(types.StringType)
 	}
 
+	queryValue := types.StringNull()
+	if override.Rule.Query != "" {
+		queryValue = types.StringValue(override.Rule.Query)
+	}
+	matchValue := types.StringNull()
+	if override.Rule.Match != "" {
+		matchValue = types.StringValue(override.Rule.Match)
+	}
+
 	data.Rule, _ = types.ObjectValue(ruleAttrTypes, map[string]attr.Value{
-		"query": types.StringValue(override.Rule.Query),
-		"match": types.StringValue(override.Rule.Match),
+		"query": queryValue,
+		"match": matchValue,
 		"tags":  tagsValue,
 	})
 
@@ -591,47 +605,30 @@ func (r *OverrideResource) updateModelFromOverride(ctx context.Context, data *Ov
 
 // v30+ helper methods for curation sets
 
-// createOverrideV30 creates or updates an override using the v30 curation sets API.
+func getCurationSetMutex(collection string) *sync.Mutex {
+	mu, _ := curationSetMu.LoadOrStore(collection, &sync.Mutex{})
+	return mu.(*sync.Mutex)
+}
+
+func (r *OverrideResource) ensureCurationSetExists(ctx context.Context, collection string) error {
+	return r.client.EnsureCurationSetExists(ctx, collection)
+}
+
+// createOverrideV30 creates or updates an override using the v30 curation item API.
 // The collection name is used as the curation set name.
 func (r *OverrideResource) createOverrideV30(ctx context.Context, collection string, override *client.Override) error {
-	// Get existing curation set or create new one
-	existingSet, err := r.client.GetCurationSet(ctx, collection)
-	if err != nil {
-		return fmt.Errorf("failed to get curation set: %w", err)
+	mu := getCurationSetMutex(collection)
+	mu.Lock()
+	defer mu.Unlock()
+
+	if err := r.ensureCurationSetExists(ctx, collection); err != nil {
+		return fmt.Errorf("failed to ensure curation set: %w", err)
 	}
 
-	var curSet *client.CurationSet
-	if existingSet == nil {
-		// Create new curation set
-		curSet = &client.CurationSet{
-			Name:      collection,
-			Curations: []client.CurationItem{},
-		}
-	} else {
-		curSet = existingSet
-	}
-
-	// Convert Override to CurationItem
 	curationItem := overrideToCurationItem(override)
-
-	// Find and update or add the curation item
-	found := false
-	for i, item := range curSet.Curations {
-		if item.ID == override.ID {
-			curSet.Curations[i] = curationItem
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		curSet.Curations = append(curSet.Curations, curationItem)
-	}
-
-	// Upsert the curation set
-	_, err = r.client.UpsertCurationSet(ctx, curSet)
+	_, err := r.client.UpsertCurationSetItem(ctx, collection, &curationItem)
 	if err != nil {
-		return fmt.Errorf("failed to upsert curation set: %w", err)
+		return fmt.Errorf("failed to upsert curation item: %w", err)
 	}
 
 	return nil
@@ -639,80 +636,60 @@ func (r *OverrideResource) createOverrideV30(ctx context.Context, collection str
 
 // getOverrideV30 retrieves a specific override from a v30 curation set.
 func (r *OverrideResource) getOverrideV30(ctx context.Context, collection, name string) (*client.Override, error) {
-	curSet, err := r.client.GetCurationSet(ctx, collection)
+	item, err := r.client.GetCurationSetItem(ctx, collection, name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get curation set: %w", err)
+		return nil, fmt.Errorf("failed to get curation item: %w", err)
 	}
 
-	if curSet == nil {
+	if item == nil {
 		return nil, nil
 	}
 
-	for _, item := range curSet.Curations {
-		if item.ID == name {
-			return curationItemToOverride(&item), nil
-		}
-	}
-
-	return nil, nil
+	return curationItemToOverride(item), nil
 }
 
 // deleteOverrideV30 removes an override from a v30 curation set.
-// If the curation set becomes empty, it deletes the entire set.
 func (r *OverrideResource) deleteOverrideV30(ctx context.Context, collection, name string) error {
-	curSet, err := r.client.GetCurationSet(ctx, collection)
-	if err != nil {
-		return fmt.Errorf("failed to get curation set: %w", err)
-	}
-
-	if curSet == nil {
-		// Already deleted
-		return nil
-	}
-
-	// Remove the curation item
-	newCurations := make([]client.CurationItem, 0, len(curSet.Curations))
-	for _, item := range curSet.Curations {
-		if item.ID != name {
-			newCurations = append(newCurations, item)
-		}
-	}
-
-	if len(newCurations) == 0 {
-		// Delete the entire curation set if empty
-		return r.client.DeleteCurationSet(ctx, collection)
-	}
-
-	// Update the curation set without the deleted item
-	curSet.Curations = newCurations
-	_, err = r.client.UpsertCurationSet(ctx, curSet)
-	if err != nil {
-		return fmt.Errorf("failed to update curation set: %w", err)
-	}
-
-	return nil
+	return r.client.DeleteCurationSetItem(ctx, collection, name)
 }
 
-// overrideToCurationItem converts a client.Override to a client.CurationItem
+// overrideToCurationItem converts a client.Override to a client.CurationItem.
+//
+// remove_matched_tokens is sent explicitly so the server does not fall back
+// to its default of true. The single exception is the replace_query +
+// remove_matched_tokens=true combination, which the server rejects as
+// mutually exclusive — in that case we omit the field and let replace_query
+// take precedence.
 func overrideToCurationItem(o *client.Override) client.CurationItem {
-	return client.CurationItem{
-		ID:                  o.ID,
-		Rule:                o.Rule,
-		Includes:            o.Includes,
-		Excludes:            o.Excludes,
-		FilterBy:            o.FilterBy,
-		SortBy:              o.SortBy,
-		ReplaceQuery:        o.ReplaceQuery,
-		RemoveMatchedTokens: o.RemoveMatchedTokens,
-		FilterCuratedHits:   o.FilterCuratedHits,
-		EffectiveFromTs:     o.EffectiveFromTs,
-		EffectiveToTs:       o.EffectiveToTs,
-		StopProcessing:      o.StopProcessing,
+	ci := client.CurationItem{
+		ID:                o.ID,
+		Rule:              o.Rule,
+		Includes:          o.Includes,
+		Excludes:          o.Excludes,
+		FilterBy:          o.FilterBy,
+		SortBy:            o.SortBy,
+		ReplaceQuery:      o.ReplaceQuery,
+		FilterCuratedHits: o.FilterCuratedHits,
+		EffectiveFromTs:   o.EffectiveFromTs,
+		EffectiveToTs:     o.EffectiveToTs,
+		StopProcessing:    o.StopProcessing,
 	}
+	if !(o.ReplaceQuery != "" && o.RemoveMatchedTokens) {
+		rmt := o.RemoveMatchedTokens
+		ci.RemoveMatchedTokens = &rmt
+	}
+	return ci
 }
 
-// curationItemToOverride converts a client.CurationItem to a client.Override
+// curationItemToOverride converts a client.CurationItem to a client.Override.
+// A nil RemoveMatchedTokens pointer means the server stored no value; we
+// surface that as false so the model stays comparable with state read from
+// per-collection v29 endpoints.
 func curationItemToOverride(c *client.CurationItem) *client.Override {
+	rmt := false
+	if c.RemoveMatchedTokens != nil {
+		rmt = *c.RemoveMatchedTokens
+	}
 	return &client.Override{
 		ID:                  c.ID,
 		Rule:                c.Rule,
@@ -721,7 +698,7 @@ func curationItemToOverride(c *client.CurationItem) *client.Override {
 		FilterBy:            c.FilterBy,
 		SortBy:              c.SortBy,
 		ReplaceQuery:        c.ReplaceQuery,
-		RemoveMatchedTokens: c.RemoveMatchedTokens,
+		RemoveMatchedTokens: rmt,
 		FilterCuratedHits:   c.FilterCuratedHits,
 		EffectiveFromTs:     c.EffectiveFromTs,
 		EffectiveToTs:       c.EffectiveToTs,

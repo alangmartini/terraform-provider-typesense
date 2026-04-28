@@ -35,4 +35,9 @@ resource "typesense_nl_search_model" "music_search" {
 
   # Limit payload size to stay within typical context windows
   max_bytes = 16000
+
+  # Test hook: when var.mock_openai_url is non-empty, redirect validation
+  # at the mock server. Leave unset in production so Typesense uses the
+  # provider's real endpoint.
+  api_url = var.mock_openai_url != "" ? var.mock_openai_url : null
 }

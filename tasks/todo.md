@@ -1,0 +1,52 @@
+# Chinook E2E Test Suite — Todo
+
+Flat checklist tracking implementation progress. Source of truth is `tasks/plan.md`.
+
+## Phase 0: Decisions
+- [x] 0.1 Verify Typesense honors `api_url` for `vllm/*` model names — PASS (also works for `openai/*`); see `docs/testing/mock-openai-protocol.md`
+- [x] 0.2 Pin Docker image tags for v27, v28, v29, v30 — `27.1`, `28.0`, `29.0`, `30.1`
+- [x] Checkpoint 0
+
+## Phase 1: Foundation
+- [x] 1.1 Container helper (`harness_test.go`) + `harness_smoke_test.go`
+- [x] 1.2 Terraform runner helper — split into `provider_build_test.go` (TestMain + binary build) and `terraform_runner_test.go` (Apply/Destroy/Plan)
+- [x] 1.3 Mock OpenAI server (`mock_openai_test.go`) + smoke test
+- [x] 1.4 Chinook fixture materializer (`chinook_fixture_test.go`) — drops conversation_model.tf unconditionally for now (mock not yet supported); chinook gains `mock_openai_url` var to redirect nl_search_model validation
+- [x] Checkpoint 1: helpers green
+
+## Phase 2: Tier 1 vertical slices (v30)
+- [x] 2.1 `apply_test.go` — TestApply (~20s wall-clock; stable across 2 runs)
+- [x] 2.2 `update_test.go` — TestUpdate (~26s; appends sentinel stopword, asserts via GetStopwordsSet)
+- [x] 2.3 `drift_test.go` — TestDrift (~25s; deletes resource server-side, plan exit=2, apply restores)
+- [x] 2.4 `import_roundtrip_test.go` — TestImportRoundtrip (~16s; required generator fix to emit `remove_matched_tokens=false` when `replace_query` is set, plus override Read fix to use null instead of empty strings for query/match)
+- [x] 2.5 `generate_idempotent_test.go` — TestGenerateIdempotent (~12-16s; normalizes only the `# Generated at` timestamp, asserts byte-identical otherwise)
+- [x] Checkpoint 2: Tier 1 stable across 3 runs (full suite ~92s wall-clock end-to-end)
+
+## Phase 3: Tier 2 — per-version smoke
+- [x] 3.1 `version_v27_test.go` — TestVersionV27 (~10-12s; analytics.tf dropped, 7 collections expected; analytics_reader API key moved into analytics.tf for self-consistency)
+- [x] 3.2 `version_v28_test.go` — TestVersionV28 (~11-13s)
+- [x] 3.3 `version_v29_test.go` — TestVersionV29 (~11-19s; required ListAnalyticsRules to also accept the v28-v29 `{"rules":[...]}` wrapped shape)
+- [x] 3.4 `version_v30_test.go` — TestVersionV30 (~12-22s)
+- [x] Checkpoint 3: total wall-clock <5 min on dev machine (Tier 1+2 = 9 tests, ~114s on dev)
+
+## Phase 4: Migration
+- [x] 4.1 `migrate_v30_test.go` — TestMigrateV30 (~30-37s isolated; seeds 3 tracks docs, runs generate --include-data + migrate --include-documents, asserts collection set, doc counts, and tracks schema fingerprint match across two v30 clusters)
+- [x] Checkpoint 4: migration timing baseline captured (~30s isolated, ~37s in full suite)
+
+## Phase 5: Edge cases (optional, Tier 3)
+- [~] 5.1 `concurrent_apply_test.go` — TestConcurrentApply (skipped: chinook's 16 synonyms in tracks already exercise the v30 set-create + parallel-item-upsert mutex; an explicit test would duplicate TestApply)
+- [x] 5.2 `escape_chars_test.go` — TestEscapeChars (~11s; surfaced and fixed a v30 curation upsert bug where omitempty on RemoveMatchedTokens=false silently fell through to the server default of true; CurationItem.RemoveMatchedTokens now uses *bool)
+- [~] 5.3 `migrate_v29_to_v30_test.go` — TestMigrateV29ToV30 (skipped: migrator's importSynonyms/importOverrides call per-collection endpoints removed in v30; needs migrator feature work to translate to synonym_sets/curation_sets first)
+- [x] 5.4 `migrate_v23_to_v30_test.go` — TestMigrateV23ToV30 (~16s; seeded a v0.23.1 source via direct HTTP, ran generate (now version-gated to skip stopwords/analytics/stemming/nl/conv on pre-v27 servers) and migrate to a v30.1 target. Surfaced two issues: generate CLI was not calling DetectServerVersion, and generateStopwords/generateAnalyticsRules returned errors on 404 instead of warn-and-skip)
+
+## Phase 6: Wire-up and cleanup
+- [x] 6.1 `make chinook-test` runs `go test -tags e2e` (delegates to `make chinook-e2e RUN=.`)
+- [x] 6.2 Remove `scripts/verify-chinook-generate.sh`
+- [x] 6.3 Update `README.md` + add `docs/testing/chinook-e2e.md`
+- [x] Checkpoint 6: single-command E2E, .sh gone, docs current
+
+## Decisions still pending (block start)
+- [ ] Tier 3 in-scope or deferred?
+- [ ] CI: every PR vs. nightly?
+- [ ] Mock OpenAI: in-process vs. container?
+- [ ] Build tag name (`e2e` vs. alternative)?

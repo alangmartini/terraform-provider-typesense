@@ -214,6 +214,28 @@ func TestGenerateOverrideBlock(t *testing.T) {
 	}
 }
 
+func TestGenerateOverrideBlockReplaceQueryEmitsRemoveMatchedTokensFalse(t *testing.T) {
+	override := &client.Override{
+		ID: "acdc_redirect",
+		Rule: client.OverrideRule{
+			Query: "acdc",
+			Match: "exact",
+		},
+		ReplaceQuery:        "AC/DC",
+		RemoveMatchedTokens: false,
+	}
+
+	block := generateOverrideBlock(override, "tracks", "tracks_acdc_redirect")
+	hcl := blockToHCL(block)
+
+	if !containsAttr(hcl, "replace_query", `"AC/DC"`) {
+		t.Error("Block should contain replace_query attribute")
+	}
+	if !containsAttr(hcl, "remove_matched_tokens", "false") {
+		t.Error("Block should explicitly emit remove_matched_tokens = false when replace_query is set")
+	}
+}
+
 func TestGenerateStopwordsBlock(t *testing.T) {
 	stopwords := &client.StopwordsSet{
 		ID:        "common_words",
@@ -232,6 +254,110 @@ func TestGenerateStopwordsBlock(t *testing.T) {
 	}
 	if !containsAttr(hcl, "locale", `"en"`) {
 		t.Error("Block should contain locale")
+	}
+}
+
+func TestGenerateCollectionAliasBlock(t *testing.T) {
+	alias := &client.CollectionAlias{
+		Name:           "music",
+		CollectionName: "tracks_2026",
+	}
+
+	block := generateCollectionAliasBlock(alias, "music")
+	hcl := blockToHCL(block)
+
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourceCollectionAlias)+`" "music"`) {
+		t.Error("Block should contain resource type and name")
+	}
+	if !containsAttr(hcl, "name", `"music"`) {
+		t.Error("Block should contain name attribute")
+	}
+	if !containsAttr(hcl, "collection_name", `"tracks_2026"`) {
+		t.Error("Block should contain collection_name attribute")
+	}
+}
+
+func TestGeneratePresetBlock(t *testing.T) {
+	preset := &client.Preset{
+		Name: "track-listing",
+		Value: map[string]any{
+			"q":        "*",
+			"query_by": "name,artist",
+			"per_page": float64(25),
+		},
+	}
+
+	block := generatePresetBlock(preset, "track_listing")
+	hcl := blockToHCL(block)
+
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourcePreset)+`" "track_listing"`) {
+		t.Error("Block should contain resource type and name")
+	}
+	if !containsAttr(hcl, "name", `"track-listing"`) {
+		t.Error("Block should contain name attribute")
+	}
+	if !strings.Contains(hcl, "query_by") {
+		t.Error("Block should contain preset value JSON")
+	}
+}
+
+func TestGenerateStemmingDictionaryBlock(t *testing.T) {
+	dictionary := &client.StemmingDictionary{
+		ID: "music-terms",
+		Words: []client.WordStemMapping{
+			{Word: "guitars", Stem: "guitar"},
+			{Word: "drumming", Stem: "drum"},
+		},
+	}
+
+	block := generateStemmingDictionaryBlock(dictionary, "music_terms")
+	hcl := blockToHCL(block)
+
+	if !strings.Contains(hcl, `resource "`+tfnames.FullTypeName(tfnames.ResourceStemmingDictionary)+`" "music_terms"`) {
+		t.Error("Block should contain resource type and name")
+	}
+	if !containsAttr(hcl, "dictionary_id", `"music-terms"`) {
+		t.Error("Block should contain dictionary_id attribute")
+	}
+	if !strings.Contains(hcl, `word = "guitars"`) || !strings.Contains(hcl, `stem = "guitar"`) {
+		t.Error("Block should contain word/stem mappings")
+	}
+}
+
+func TestGenerateSynonymBlockWithLiteralCollection(t *testing.T) {
+	synonym := &client.Synonym{
+		ID:       "shoe_terms",
+		Synonyms: []string{"shoe", "sneaker"},
+	}
+
+	block := generateSynonymBlockWithCollectionLiteral(synonym, "products", "products_shoe_terms")
+	hcl := blockToHCL(block)
+
+	if !containsAttr(hcl, "collection", `"products"`) {
+		t.Error("Block should contain literal collection name")
+	}
+	if strings.Contains(hcl, tfnames.FullTypeName(tfnames.ResourceCollection)+".products.name") {
+		t.Error("Block should not reference a collection resource")
+	}
+}
+
+func TestGenerateOverrideBlockWithLiteralCollection(t *testing.T) {
+	override := &client.Override{
+		ID: "featured",
+		Rule: client.OverrideRule{
+			Query: "featured",
+			Match: "exact",
+		},
+	}
+
+	block := generateOverrideBlockWithCollectionLiteral(override, "products", "products_featured")
+	hcl := blockToHCL(block)
+
+	if !containsAttr(hcl, "collection", `"products"`) {
+		t.Error("Block should contain literal collection name")
+	}
+	if strings.Contains(hcl, tfnames.FullTypeName(tfnames.ResourceCollection)+".products.name") {
+		t.Error("Block should not reference a collection resource")
 	}
 }
 

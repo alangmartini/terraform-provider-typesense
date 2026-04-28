@@ -174,6 +174,17 @@ func TestGeneratedHCLValidatesWithTerraform(t *testing.T) {
 			},
 		},
 		{
+			name:         "collection_alias",
+			resourceName: tfnames.ResourceCollectionAlias,
+			appendBlocks: func(body *hclwrite.Body) {
+				body.AppendBlock(generateCollectionAliasBlock(&client.CollectionAlias{
+					Name:           "products",
+					CollectionName: "products_2026",
+				}, "products_alias"))
+				body.AppendNewline()
+			},
+		},
+		{
 			name:         "stopwords",
 			resourceName: tfnames.ResourceStopwordsSet,
 			appendBlocks: func(body *hclwrite.Body) {
@@ -215,6 +226,21 @@ func TestGeneratedHCLValidatesWithTerraform(t *testing.T) {
 			},
 		},
 		{
+			name:         "preset",
+			resourceName: tfnames.ResourcePreset,
+			appendBlocks: func(body *hclwrite.Body) {
+				body.AppendBlock(generatePresetBlock(&client.Preset{
+					Name: "track-listing",
+					Value: map[string]any{
+						"q":        "*",
+						"query_by": "name,artist",
+						"per_page": float64(25),
+					},
+				}, "track_listing"))
+				body.AppendNewline()
+			},
+		},
+		{
 			name:         "analytics_rule",
 			resourceName: tfnames.ResourceAnalyticsRule,
 			appendBlocks: func(body *hclwrite.Body) {
@@ -240,6 +266,20 @@ func TestGeneratedHCLValidatesWithTerraform(t *testing.T) {
 					Actions:     []string{"documents:search"},
 					Collections: []string{"products"},
 				}, "search_only"))
+				body.AppendNewline()
+			},
+		},
+		{
+			name:         "stemming_dictionary",
+			resourceName: tfnames.ResourceStemmingDictionary,
+			appendBlocks: func(body *hclwrite.Body) {
+				body.AppendBlock(generateStemmingDictionaryBlock(&client.StemmingDictionary{
+					ID: "music-terms",
+					Words: []client.WordStemMapping{
+						{Word: "guitars", Stem: "guitar"},
+						{Word: "drumming", Stem: "drum"},
+					},
+				}, "music_terms"))
 				body.AppendNewline()
 			},
 		},
