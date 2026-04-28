@@ -37,6 +37,7 @@ Flat checklist tracking implementation progress. Source of truth is `tasks/plan.
 - [~] 5.1 `concurrent_apply_test.go` — TestConcurrentApply (skipped: chinook's 16 synonyms in tracks already exercise the v30 set-create + parallel-item-upsert mutex; an explicit test would duplicate TestApply)
 - [x] 5.2 `escape_chars_test.go` — TestEscapeChars (~11s; surfaced and fixed a v30 curation upsert bug where omitempty on RemoveMatchedTokens=false silently fell through to the server default of true; CurationItem.RemoveMatchedTokens now uses *bool)
 - [~] 5.3 `migrate_v29_to_v30_test.go` — TestMigrateV29ToV30 (skipped: migrator's importSynonyms/importOverrides call per-collection endpoints removed in v30; needs migrator feature work to translate to synonym_sets/curation_sets first)
+- [x] 5.4 `migrate_v23_to_v30_test.go` — TestMigrateV23ToV30 (~16s; seeded a v0.23.1 source via direct HTTP, ran generate (now version-gated to skip stopwords/analytics/stemming/nl/conv on pre-v27 servers) and migrate to a v30.1 target. Surfaced two issues: generate CLI was not calling DetectServerVersion, and generateStopwords/generateAnalyticsRules returned errors on 404 instead of warn-and-skip)
 
 ## Phase 6: Wire-up and cleanup
 - [x] 6.1 `make chinook-test` runs `go test -tags e2e` (delegates to `make chinook-e2e RUN=.`)
