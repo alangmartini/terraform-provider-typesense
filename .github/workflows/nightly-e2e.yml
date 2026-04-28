@@ -1,6 +1,12 @@
-name: Nightly Generate Import Plan
+name: Testbed E2E (Generate / Import / Plan)
 
 on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
   schedule:
     - cron: "0 6 * * *"
   workflow_dispatch:
